@@ -1,0 +1,188 @@
+agent:
+  system_template: |
+    You are a helpful assistant that can interact with a computer.
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+
+    Include a THOUGHT section before your command where you explain your reasoning process.
+    Format your response as shown in <format_example>.
+
+    <format_example>
+    THOUGHT: Your reasoning and analysis here
+
+    ```bash
+    your_command_here
+    ```
+    </format_example>
+
+    Prefer targeted reads over whole-file reads. Use `nl -ba <file> | sed -n 'start,endp'`, `head`, `tail`, or `rg -n` first.
+    Failure to follow these rules will cause your response to be rejected.
+  instance_template: |
+    Please solve this issue: {{task}}
+    You can execute bash commands and edit files to implement the necessary changes.
+
+    ## Recommended Workflow
+    This workflow should be done step-by-step so that you can iterate on your changes and any possible problems.
+    1. Analyze the codebase by finding and reading relevant files
+    2. Create a script to reproduce the issue
+    3. Edit the source code to resolve the issue
+    4. Verify your fix works by running your script again
+    5. Test edge cases to ensure your fix is robust
+    6. Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached`. After this command, you cannot continue working on this task.
+    7. Do not submit until you have completed the full end-to-end reproduce-fix-retest loop and confirmed the reported behavior is resolved.
+
+    ## Important Rules
+    1. Every response must contain exactly one action
+    2. The action must be enclosed in triple backticks
+    3. Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files.
+    {% if system is defined %}{{system}}{% endif %}
+    {% if release is defined %}{{release}}{% endif %}
+    {% if version is defined %}{{version}}{% endif %}
+    {% if machine is defined %}{{machine}}{% endif %}
+
+    ## Deterministic Retrieval Context
+    Treat the following as already-retrieved evidence for this task. Use it directly instead of redoing broad repo search.
+
+    ### Issue Anchors
+    - `max filter`
+    - `min filter`
+    - `attribute`
+    - `block_total`
+    - `ansible_mounts`
+
+    ### Pre-searched Candidate Hits
+    1. `lib/ansible/plugins/filter/mathstuff.py`
+       - contains `def min(a)` / `def max(a)`
+       - likely core implementation for this issue
+    2. `test/units/plugins/filter/test_mathstuff.py`
+       - existing tests for min/max filters
+    3. `docs/docsite/rst/user_guide/playbooks_filters.rst`
+       - optional docs follow-up, not core fix path
+
+    ### Suggested First Reads
+    - `lib/ansible/plugins/filter/mathstuff.py:120-135`
+    - `test/units/plugins/filter/test_mathstuff.py:60-90`
+
+    ### Precomputed Search Evidence
+    - `rg -n "def min\\(|def max\\(" lib/ansible/plugins/filter`
+      - `lib/ansible/plugins/filter/mathstuff.py:126:def min(a):`
+      - `lib/ansible/plugins/filter/mathstuff.py:131:def max(a):`
+    - `rg -n "test_min|test_max" test/units/plugins/filter`
+      - `test/units/plugins/filter/test_mathstuff.py:66:def test_min(self):`
+      - `test/units/plugins/filter/test_mathstuff.py:73:def test_max(self):`
+
+    ### First-action Constraint
+    Do not search the whole repo.
+    Open `lib/ansible/plugins/filter/mathstuff.py` around `def min` / `def max` first.
+    If needed, read `test/units/plugins/filter/test_mathstuff.py` in the suggested window next.
+
+    ### Hypothesis
+    Current wrappers likely only accept one positional argument and do not forward keyword args like `attribute=...`.
+
+    ### Likely Fix Shape
+    Update `min` / `max` wrappers to forward args/kwargs or implement attribute-aware comparison consistently with existing filter behavior.
+
+    ### Retrieval Rules
+    Use the candidate hits and exact windows before any other exploration.
+    Prefer `nl -ba <file> | sed -n 'start,endp'` over whole-file reads.
+    If you are about to read a full source file, stop and prefer a narrow window first.
+    Do not begin with `find /`, `find . -type f`, `rg --files`, or broad `grep -R`.
+    Do not ignore the precomputed search evidence and repeat the same search from scratch.
+
+    ## Formatting your response
+    Here is an example of a correct response:
+
+    THOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+
+    ```bash
+    ls -la
+    ```
+
+    ## Useful command examples
+    ### Create a new file:
+    ```bash
+    cat <<'EOF' > newfile.py
+    import numpy as np
+    hello = "world"
+    print(hello)
+    EOF
+    ```
+
+    ### Edit files with sed:
+    ```bash
+    # Replace all occurrences
+    sed -i 's/old_string/new_string/g' filename.py
+
+    # Replace only first occurrence
+    sed -i 's/old_string/new_string/' filename.py
+
+    # Replace first occurrence on line 1
+    sed -i '1s/old_string/new_string/' filename.py
+
+    # Replace all occurrences in lines 1-10
+    sed -i '1,10s/old_string/new_string/g' filename.py
+    ```
+
+    ### View file content:
+    ```bash
+    # View specific lines with numbers
+    nl -ba filename.py | sed -n '10,20p'
+    ```
+
+    ### Any other command you want to run
+    ```bash
+    anything
+    ```
+  action_observation_template: |
+    <returncode>{{output.returncode}}</returncode>
+    {% if output.output | length < 10000 -%}
+    <output>
+    {{ output.output -}}
+    </output>
+    {%- else -%}
+    <warning>
+    The output of your last command was too long.
+    Please try a different command that produces less output.
+    </warning>
+    {%- set elided_chars = output.output | length - 10000 -%}
+    <output_head>
+    {{ output.output[:5000] }}
+    </output_head>
+    <elided_chars>
+    {{ elided_chars }} characters elided
+    </elided_chars>
+    <output_tail>
+    {{ output.output[-5000:] }}
+    </output_tail>
+    {%- endif -%}
+  format_error_template: |
+    Please always provide EXACTLY ONE action in triple backticks, found {{actions|length}} actions.
+    If you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached`
+    Else, please format your response exactly as follows:
+
+    Here are some thoughts about why you want to perform the action.
+    ```bash
+    <action>
+    ```
+  step_limit: 100
+  cost_limit: 3.
+  deterministic_retrieval_first_action_guard: false
+  read_cache_enable: false
+  confidence_check_enabled: false
+
+environment:
+  cwd: "/app"
+  timeout: 60
+  env:
+    PAGER: cat
+    MANPAGER: cat
+    LESS: -R
+    PIP_PROGRESS_BAR: "off"
+    TQDM_DISABLE: "1"
+  environment_class: docker
+
+model:
+  model_name: "anthropic/claude-sonnet-4-5-20250929"
+  model_kwargs:
+    drop_params: true
+    temperature: 0.0

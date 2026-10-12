@@ -1,0 +1,87 @@
+agent:
+  system_template: |
+    You are a software engineer solving repository tasks through shell commands.
+    Reply with exactly one ```bash``` code block containing exactly one command (commands may be chained with && or ||).
+    Do not include THOUGHT or any text outside the bash block.
+
+    Required format:
+    ```bash
+    your_command_here
+    ```
+
+    If finished and ready to submit, run exactly:
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached
+    ```
+  instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    Goal: implement a general, correct fix for the PR in source files under /testbed.
+
+    Constraints:
+    - Modify non-test source files only.
+    - Do not modify config/build files unless required by the fix.
+    - One response = one bash code block = one command.
+    - Use non-interactive commands.
+
+    Suggested workflow:
+    1. Locate relevant files.
+    2. Reproduce the issue quickly.
+    3. Implement a minimal robust fix.
+    4. Verify with focused checks/tests.
+    5. Submit using the required COMPLETE command.
+    </instructions>
+  action_observation_template: |
+    <returncode>{{output.returncode}}</returncode>
+    {% if output.output | length < 10000 -%}
+    <output>
+    {{ output.output -}}
+    </output>
+    {%- else -%}
+    <warning>
+    The output of your last command was too long.
+    Please try a different command that produces less output.
+    If you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.
+    If you're using grep or find and it produced too much output, you can use a more selective search pattern.
+    If you really need to see something from the full command's output, you can redirect output to a file and then search in that file.
+    </warning>
+    {%- set elided_chars = output.output | length - 10000 -%}
+    <output_head>
+    {{ output.output[:5000] }}
+    </output_head>
+    <elided_chars>
+    {{ elided_chars }} characters elided
+    </elided_chars>
+    <output_tail>
+    {{ output.output[-5000:] }}
+    </output_tail>
+    {%- endif -%}
+  format_error_template: |
+    Please provide EXACTLY ONE action in triple backticks.
+
+    ```bash
+    <action>
+    ```
+  step_limit: 250
+  cost_limit: 3.
+
+environment:
+  cwd: "/testbed"
+  timeout: 60
+  env:
+    PAGER: cat
+    MANPAGER: cat
+    LESS: -R
+    PIP_PROGRESS_BAR: 'off'
+    TQDM_DISABLE: '1'
+  environment_class: docker
+
+model:
+  model_name: "anthropic/claude-sonnet-4-5-20250929"
+  model_kwargs:
+    drop_params: true
+    temperature: 0.0

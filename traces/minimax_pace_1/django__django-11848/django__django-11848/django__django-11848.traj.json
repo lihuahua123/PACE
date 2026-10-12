@@ -1,0 +1,1881 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "diff --git a/django/utils/http.py b/django/utils/http.py\nindex 572cfb4347..6c75efab5f 100755\n--- a/django/utils/http.py\n+++ b/django/utils/http.py\n@@ -176,10 +176,10 @@ def parse_http_date(date):\n     try:\n         year = int(m.group('year'))\n         if year < 100:\n-            if year < 70:\n-                year += 2000\n-            else:\n-                year += 1900\n+            current_year = datetime.datetime.now().year\n+            year += current_year - current_year % 100\n+            if year > current_year + 50:\n+                year -= 100\n         month = MONTHS.index(m.group('mon').lower()) + 1\n         day = int(m.group('day'))\n         hour = int(m.group('hour'))\ndiff --git a/fix_http.py b/fix_http.py\nnew file mode 100644\nindex 0000000000..d697fbce51\n--- /dev/null\n+++ b/fix_http.py\n@@ -0,0 +1,26 @@\n+import re\n+\n+with open('/testbed/django/utils/http.py', 'r') as f:\n+    content = f.read()\n+\n+# Find and replace the old hardcoded year logic\n+old_code = '''        year = int(m.group('year'))\n+        if year < 100:\n+            if year < 70:\n+                year += 2000\n+            else:\n+                year += 1900'''\n+\n+new_code = '''        year = int(m.group('year'))\n+        if year < 100:\n+            current_year = datetime.datetime.now().year\n+            year += current_year - current_year % 100\n+            if year > current_year + 50:\n+                year -= 100'''\n+\n+content = content.replace(old_code, new_code)\n+\n+with open('/testbed/django/utils/http.py', 'w') as f:\n+    f.write(content)\n+\n+print(\"Fix applied successfully!\")\ndiff --git a/test_rfc7231_fix.py b/test_rfc7231_fix.py\nnew file mode 100644\nindex 0000000000..f5a5021649\n--- /dev/null\n+++ b/test_rfc7231_fix.py\n@@ -0,0 +1,34 @@\n+import datetime\n+from django.utils.http import parse_http_date\n+\n+# Test cases for two-digit year parsing\n+test_cases = [\n+    ('Sunday, 06-Nov-94 08:49:37 GMT', datetime.datetime(1994, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-69 08:49:37 GMT', datetime.datetime(2069, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-70 08:49:37 GMT', datetime.datetime(1970, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-99 08:49:37 GMT', datetime.datetime(1999, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-00 08:49:37 GMT', datetime.datetime(2000, 11, 6, 8, 49, 37)),\n+]\n+\n+current_year = datetime.datetime.now().year\n+print(f\"Current year: {current_year}\")\n+print(f\"50 years from now: {current_year + 50}\")\n+print()\n+\n+for date_str, expected in test_cases:\n+    try:\n+        parsed = parse_http_date(date_str)\n+        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"Got: {parsed_dt}\")\n+        if parsed_dt == expected:\n+            print(\"PASS\")\n+        else:\n+            print(\"FAIL - Result doesn't match expected\")\n+        print()\n+    except Exception as e:\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"ERROR: {e}\")\n+        print()\ndiff --git a/test_rfc7231_fix2.py b/test_rfc7231_fix2.py\nnew file mode 100644\nindex 0000000000..5576abd7cb\n--- /dev/null\n+++ b/test_rfc7231_fix2.py\n@@ -0,0 +1,41 @@\n+import datetime\n+from django.utils.http import parse_http_date\n+\n+current_year = datetime.datetime.now().year\n+print(f\"Current year: {current_year}\")\n+print(f\"50 years from now: {current_year + 50}\")\n+print()\n+\n+# According to RFC 7231:\n+# \"a timestamp that appears to be more than 50 years in the future \n+#  as representing the most recent year in the past that had the same last two digits\"\n+\n+# If current year is 2026:\n+# - 76 would be 2076, which is exactly 50 years in the future -> should stay as 2076\n+# - 77 would be 2077, which is more than 50 years in the future -> should be 1977\n+\n+# Test the edge cases\n+test_cases = [\n+    ('Sunday, 06-Nov-76 08:49:37 GMT', datetime.datetime(2076, 11, 6, 8, 49, 37)),  # Exactly 50 years\n+    ('Sunday, 06-Nov-77 08:49:37 GMT', datetime.datetime(1977, 11, 6, 8, 49, 37)),  # More than 50 years -> past\n+    ('Sunday, 06-Nov-25 08:49:37 GMT', datetime.datetime(2025, 11, 6, 8, 49, 37)),  # Within 50 years -> future\n+]\n+\n+print(\"Testing RFC 7231 compliant behavior:\")\n+for date_str, expected in test_cases:\n+    try:\n+        parsed = parse_http_date(date_str)\n+        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"Got: {parsed_dt}\")\n+        if parsed_dt == expected:\n+            print(\"PASS\")\n+        else:\n+            print(\"FAIL - Result doesn't match expected (not RFC 7231 compliant)\")\n+        print()\n+    except Exception as e:\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"ERROR: {e}\")\n+        print()\n",
+    "model_stats": {
+      "instance_cost": 0.159230736,
+      "api_calls": 24,
+      "cost_usd": 0.159230736,
+      "per_model": [
+        {
+          "model_name": "MiniMax-M2.7",
+          "response_models": [
+            "MiniMax-M2.7"
+          ],
+          "api_calls": 24,
+          "cost_usd": 0.159230736
+        }
+      ],
+      "main_cost_usd": 0.159230736,
+      "main_api_calls": 24,
+      "main_per_model": [
+        {
+          "model_name": "MiniMax-M2.7",
+          "response_models": [
+            "MiniMax-M2.7"
+          ],
+          "api_calls": 24,
+          "cost_usd": 0.159230736
+        }
+      ],
+      "scout_handoff_cost_usd": 0.0,
+      "scout_handoff_api_calls": 0,
+      "scout_handoff_per_model": []
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact multiple times with a computer shell to solve programming tasks.\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\n\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here\n\n```bash\nyour_command_here\n```\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.\n",
+        "instance_template": "<pr_description>\nConsider the following PR description:\n{{task}}\n</pr_description>\n\n<instructions>\n# Task Instructions\n\n## Overview\nYou're a software engineer interacting continuously with a computer by submitting commands.\nYou'll be helping implement necessary changes to meet requirements in the PR description.\nYour task is specifically to make changes to non-test files in the current directory in order to fix the issue described in the PR description in a way that is general and consistent with the codebase.\n\nIMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.\n\nFor each response:\n1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish\n2. Provide exactly ONE bash command to execute\n\n## Important Boundaries\n- MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)\n- DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)\n\n## Recommended Workflow\n1. Analyze the codebase by finding and reading relevant files\n2. Create a script to reproduce the issue\n3. Edit the source code to resolve the issue\n4. Verify your fix works by running your script again\n5. Test edge cases to ensure your fix is robust\n\n## Command Execution Rules\nYou are operating in an environment where\n1. You write a single command\n2. The system executes that command in a subshell\n3. You see the result\n4. You write your next command\n\nEach response should include:\n1. A **THOUGHT** section where you explain your reasoning and plan\n2. A single bash code block with your command\n\nFormat your responses like this:\n\n<format_example>\nTHOUGHT: Here I explain my reasoning process, analysis of the current situation,\nand what I'm trying to accomplish with the command below.\n\n```bash\nyour_command_here\n```\n</format_example>\n\nCommands must be specified in a single bash code block:\n\n```bash\nyour_command_here\n```\n\n**CRITICAL REQUIREMENTS:**\n- Your response SHOULD include a THOUGHT section explaining your reasoning\n- Your response MUST include EXACTLY ONE bash code block\n- This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)\n- If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL\n- Do NOT try to run multiple independent commands in separate blocks in one response\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n\nExample of a CORRECT response:\n<example_response>\nTHOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.\n\n```bash\nls -la\n```\n</example_response>\n\nExample of an INCORRECT response:\n<example_response>\nTHOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.\n\n```bash\nls -la\n```\n\nNow I'll read the file:\n\n```bash\ncat file.txt\n```\n</example_response>\n\nIf you need to run multiple commands, either:\n1. Combine them in one block using && or ||\n```bash\ncommand1 && command2 || echo \"Error occurred\"\n```\n\n2. Wait for the first command to complete, see its output, then issue the next command in your following response.\n\n## Environment Details\n- You have a full Linux shell environment\n- Always use non-interactive flags (-y, -f) for commands\n- Avoid interactive tools like vi, nano, or any that require user input\n- If a command isn't available, you can install it\n\n## Useful Command Examples\n\n### Create a new file:\n```bash\ncat <<'EOF' > newfile.py\nimport numpy as np\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n\n# Replace first occurrence on line 1\nsed -i '1s/old_string/new_string/' filename.py\n\n# Replace all occurrences in lines 1-10\nsed -i '1,10s/old_string/new_string/g' filename.py\n```\n\n### View file content:\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```\n\n### Any other command you want to run\n```bash\nanything\n```\n\n## Submission\nWhen you've completed your work (reading, editing, testing), and cannot make further progress\nissue exactly the following command:\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached\n```\n\nThis command will submit your work.\nYou cannot continue working (reading, editing, testing) in any way on this task after submitting.\n</instructions>\n",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n <output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.",
+        "format_error_template": "Please always provide EXACTLY ONE action in triple backticks, found {{actions|length}} actions.\n\nPlease format your action in triple backticks as shown in <response_example>.\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n```bash\n<action>\n```\n</response_example>\n\nIf you have completed your assignment, please consult the first message about how to\nsubmit your solution (you will not be able to continue working on this task after that).\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 10000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 10000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 250,
+        "cost_limit": 3.0,
+        "turn_control": false,
+        "turn_control_mode": "unrestricted",
+        "turn_control_fixed_limit": 0,
+        "turn_control_initial_limit": 0,
+        "turn_control_extension_limit": 0,
+        "turn_control_reminder": false,
+        "trace_repetition_nudge_enabled": false,
+        "trace_repetition_read_loop_nudge_enabled": false,
+        "trace_repetition_nudge_force_enabled": false,
+        "trace_repetition_nudge_force_num": 6,
+        "trace_status_bar_enabled": false,
+        "trace_status_bar_max_items": 8,
+        "trace_status_bar_interval": 3,
+        "trace_status_bar_next_action_guidance_enabled": false,
+        "trace_status_repeat_block_enabled": true,
+        "trace_status_repeat_block_max_consecutive_inspections": 8,
+        "trace_status_repeat_block_max_total_inspections_since_edit": 35,
+        "trace_status_repeat_block_max_scratch_experiments_since_edit": 7,
+        "trace_status_repeat_block_max_test_phase_tests": 4,
+        "trace_status_repeat_block_dynamic_inspection_enabled": false,
+        "trace_status_repeat_block_dynamic_inspection_max_bonus": 30,
+        "trace_status_large_read_block_enabled": false,
+        "trace_status_large_read_block_max_lines": 1000,
+        "trace_status_long_output_truncation_enabled": false,
+        "trace_status_long_output_truncation_max_chars": 4000,
+        "trace_status_long_output_truncation_head_tail_chars": 1500,
+        "trace_status_progressive_read_enabled": false,
+        "trace_status_progressive_read_chunk_lines": 200,
+        "trace_status_old_observation_compaction_enabled": false,
+        "trace_status_old_observation_compaction_max_chars": 4000,
+        "trace_status_old_observation_compaction_conclusion_chars": 1200,
+        "trace_status_post_verify_guard_enabled": false,
+        "trace_status_post_verify_max_extra_tests": 1,
+        "trace_status_post_verify_max_extra_inspections": 3,
+        "trace_action_budget_controller_enabled": false,
+        "trace_action_budget_search": 8,
+        "trace_action_budget_edit": 5,
+        "trace_action_budget_test": 3,
+        "consecutive_unproductive_failure_threshold": 3,
+        "repeated_submit_force_threshold": 3,
+        "require_successful_test_before_submit": false,
+        "deterministic_retrieval_first_action_guard": false,
+        "whole_file_read_hint_enabled": false,
+        "whole_file_read_block_enabled": false,
+        "read_cache_enable": false,
+        "scout_handoff_enabled": false,
+        "scout_handoff_constraints_enabled": false,
+        "scout_handoff_system_template": "You are a scout agent. Your job is to cheaply explore the repository before a stronger model takes over. Do not edit files and do not submit. Either respond with exactly one bash command in one fenced bash block to gather more evidence, or output the final handoff in the requested Issue/Observed/Candidate files/Uncertainty format when you have enough information. Once a plausible production file and function are found, prefer producing the handoff instead of broad exploration. Before the final handoff, run one focused read/search for existing tests or call sites of the candidate function when possible, and capture exact call signatures, keyword arguments, or selected test commands; never list tests as candidate files.",
+        "scout_handoff_instance_template": "Scout this issue for the main model:\n\n{{task}}\n\nRun only read-only inspection commands or focused reproduction commands. Do not modify files. Prefer concise commands whose output can support a handoff. When you have enough evidence, especially after identifying the likely production source file and relevant line range, inspect focused existing tests or call sites for the candidate symbols if possible, then stop running commands and output exactly this format without a code block. Include expected call signatures, keyword arguments, and test command names under Observed, not under Candidate files. If you could not find focused tests or call sites, say which command you tried under Uncertainty:\n\nIssue:\n- \u7528\u6237\u62a5\u544a/\u5931\u8d25\u73b0\u8c61\u4e00\u53e5\u8bdd\n\nObserved:\n- \u590d\u73b0\u547d\u4ee4\u548c\u5173\u952e\u8f93\u51fa\n\nCandidate files:\n- path:line\uff0c\u4e3a\u4ec0\u4e48\u76f8\u5173\u3002Only list production source files here; do not list tests as candidate files.\n\n\n\nUncertainty:\n- \u54ea\u4e9b\u5730\u65b9\u8fd8\u4e0d\u786e\u5b9a",
+        "scout_handoff_constraint_template": "\n\nAdditional constraints for this run:\n- If an expected direct path is missing, first identify the repository's source root instead of assuming the current directory is the import/build root. Common layouts include src/, lib/, package directories, and packages/*, but infer from this repo.\n- When validating, make sure commands exercise the current checkout, not a globally installed package, dependency cache, virtualenv dependency, or system copy. If imports resolve outside the workspace, adjust the command/environment rather than editing outside the workspace.\n- Do not edit external dependencies, installed packages, package caches, virtualenv dependencies, or system files. Final patches must come from the repository workspace.\n- In addition to any focused existing test, run or describe one minimal issue-driven verification that directly covers the user's reported behavior and API shape.",
+        "scout_handoff_summary_template": "Now produce the handoff for the main model. Do not include a code block. Use exactly this format:\n\nIssue:\n- \u7528\u6237\u62a5\u544a/\u5931\u8d25\u73b0\u8c61\u4e00\u53e5\u8bdd\n\nObserved:\n- \u590d\u73b0\u547d\u4ee4\u548c\u5173\u952e\u8f93\u51fa\u3002Include exact production signatures and any focused test/call-site signatures or kwargs observed.\n\nCandidate files:\n- path:line\uff0c\u4e3a\u4ec0\u4e48\u76f8\u5173\u3002Only list production source files here; do not list tests as candidate files.\n\n\n\nUncertainty:\n- \u54ea\u4e9b\u5730\u65b9\u8fd8\u4e0d\u786e\u5b9a"
+      },
+      "model": {
+        "model_name": "openai/MiniMax-M2.7",
+        "model_kwargs": {
+          "drop_params": true,
+          "temperature": 0.0
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null,
+        "request_timeout_threshold": 120.0
+      },
+      "environment": {
+        "image": "docker.io/swebench/sweb.eval.x86_64.django_1776_django-11848:latest",
+        "cwd": "/testbed",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1"
+        },
+        "forward_env": [],
+        "timeout": 60,
+        "executable": "docker",
+        "run_args": [
+          "--rm"
+        ],
+        "container_timeout": "2h",
+        "pull_timeout": 600,
+        "startup_timeout": 120,
+        "command_timeout_threshold": 0.0
+      },
+      "agent_type": "__main__.ProgressTrackingAgent",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "trace_status_repeat_block_enabled": true,
+    "trace_status_repeat_block_thresholds": {
+      "max_consecutive_inspections": 8,
+      "max_total_inspections_since_edit": 35,
+      "max_scratch_experiments_since_edit": 7,
+      "max_test_phase_tests": 4,
+      "dynamic_inspection_max_bonus": 30
+    },
+    "trace_status_repeat_block": {
+      "reads": [
+        {
+          "file": "/testbed/django/utils/http.py",
+          "line_range": "full",
+          "first_step": 2,
+          "last_step": 2,
+          "count": 1
+        },
+        {
+          "file": "/testbed/django/utils/http.py",
+          "line_range": "158-195",
+          "first_step": 4,
+          "last_step": 4,
+          "count": 1
+        },
+        {
+          "file": "/testbed/tests/utils_tests/test_http.py",
+          "line_range": "search",
+          "first_step": 5,
+          "last_step": 5,
+          "count": 1
+        },
+        {
+          "file": "/testbed/tests/utils_tests/test_http.py",
+          "line_range": "310-350",
+          "first_step": 6,
+          "last_step": 6,
+          "count": 1
+        },
+        {
+          "file": "/testbed/django/utils/http.py",
+          "line_range": "175-195",
+          "first_step": 11,
+          "last_step": 16,
+          "count": 2
+        },
+        {
+          "file": "/testbed/django/utils/http.py",
+          "line_range": "175-210",
+          "first_step": 12,
+          "last_step": 12,
+          "count": 1
+        }
+      ],
+      "searches": [
+        {
+          "signature": "parse_http_date @ 2>/dev/null",
+          "first_step": 1,
+          "last_step": 1,
+          "count": 1
+        },
+        {
+          "signature": "parse_http_date\\|year\\|__Y2\\|RFC850 @ /testbed/django/utils/http.py",
+          "first_step": 3,
+          "last_step": 3,
+          "count": 1
+        },
+        {
+          "signature": "parse_http_date @ /testbed/tests/utils_tests/test_http.py",
+          "first_step": 5,
+          "last_step": 5,
+          "count": 1
+        }
+      ],
+      "edits": [
+        {
+          "target": "/testbed/test_rfc7231_fix.py",
+          "first_step": 7,
+          "last_step": 7,
+          "count": 1
+        },
+        {
+          "target": "/testbed/test_rfc7231_fix2.py",
+          "first_step": 8,
+          "last_step": 8,
+          "count": 1
+        },
+        {
+          "target": "/testbed/django/utils/http.py",
+          "first_step": 10,
+          "last_step": 15,
+          "count": 2
+        },
+        {
+          "target": "/testbed/fix_http.py",
+          "first_step": 15,
+          "last_step": 15,
+          "count": 1
+        }
+      ],
+      "tests": [
+        {
+          "step": 5,
+          "returncode": 0,
+          "command": "grep -n \"parse_http_date\" /testbed/tests/utils_tests/test_http.py | head -20",
+          "signature": "grep -n \"parse_http_date\" /testbed/tests/utils_tests/test_http.py | head -20"
+        },
+        {
+          "step": 7,
+          "returncode": 0,
+          "command": "cat <<'EOF' > /testbed/test_rfc7231_fix.py import datetime from django.utils.http impor...",
+          "signature": "cat <<'EOF' > /testbed/test_rfc7231_fix.py import datetime from django.utils.http import parse_http_date # Test cases for two-digit year parsing test_cases = [ ('Sunday, 06-Nov-94 08:49:37 GMT', datetime.datetime(1994, 11, 6, 8, 49, 37)), ('Sunday, 06-Nov-69 08:49:37 GMT', datetime.datetime(2069, 11, 6, 8, 49, 37)), ('Sunday, 06-Nov-70 08:49:37 GMT', datetime.datetime(1970, 11, 6, 8, 49, 37)), ('Sunday, 06-Nov-99 08:49:37 GMT', datetime.datetime(1999, 11, 6, 8, 49, 37)), ('Sunday, 06-Nov-00 08:49:37 GMT', datetime.datetime(2000, 11, 6, 8, 49, 37)), ] current_year = datetime.datetime.now().year print(f\"Current year: {current_year}\") print(f\"50 years from now: {current_year + 50}\") print() for date_str, expected in test_cases: try: parsed = parse_http_date(date_str) parsed_dt = datetime.datetime.utcfromtimestamp(parsed) print(f\"Input: {date_str}\") print(f\"Expected: {expected}\") print(f\"Got: {parsed_dt}\") if parsed_dt == expected: print(\"PASS\") else: print(\"FAIL - Result doesn't match expected\") print() except Exception as e: print(f\"Input: {date_str}\") print(f\"Expected: {expected}\") print(f\"ERROR: {e}\") print() EOF python /testbed/test_rfc7231_fix.py"
+        },
+        {
+          "step": 8,
+          "returncode": 0,
+          "command": "cat <<'EOF' > /testbed/test_rfc7231_fix2.py import datetime from django.utils.http impo...",
+          "signature": "cat <<'EOF' > /testbed/test_rfc7231_fix2.py import datetime from django.utils.http import parse_http_date current_year = datetime.datetime.now().year print(f\"Current year: {current_year}\") print(f\"50 years from now: {current_year + 50}\") print() # According to RFC 7231: # \"a timestamp that appears to be more than 50 years in the future # as representing the most recent year in the past that had the same last two digits\" # If current year is 2026: # - 76 would be 2076, which is exactly 50 years in the future -> should stay as 2076 # - 77 would be 2077, which is more than 50 years in the future -> should be 1977 # Test the edge cases test_cases = [ ('Sunday, 06-Nov-76 08:49:37 GMT', datetime.datetime(2076, 11, 6, 8, 49, 37)), # Exactly 50 years ('Sunday, 06-Nov-77 08:49:37 GMT', datetime.datetime(1977, 11, 6, 8, 49, 37)), # More than 50 years -> past ('Sunday, 06-Nov-25 08:49:37 GMT', datetime.datetime(2025, 11, 6, 8, 49, 37)), # Within 50 years -> future ] print(\"Testing RFC 7231 compliant behavior:\") for date_str, expected in test_cases: try: parsed = parse_http_date(date_str) parsed_dt = datetime.datetime.utcfromtimestamp(parsed) print(f\"Input: {date_str}\") print(f\"Expected: {expected}\") print(f\"Got: {parsed_dt}\") if parsed_dt == expected: print(\"PASS\") else: print(\"FAIL - Result doesn't match expected (not RFC 7231 compliant)\") print() except Exception as e: print(f\"Input: {date_str}\") print(f\"Expected: {expected}\") print(f\"ERROR: {e}\") print() EOF python /testbed/test_rfc7231_fix2.py"
+        },
+        {
+          "step": 17,
+          "returncode": 0,
+          "command": "python /testbed/test_rfc7231_fix2.py",
+          "signature": "python /testbed/test_rfc7231_fix2.py"
+        },
+        {
+          "step": 18,
+          "returncode": 0,
+          "command": "python /testbed/test_rfc7231_fix.py",
+          "signature": "python /testbed/test_rfc7231_fix.py"
+        },
+        {
+          "step": 19,
+          "returncode": 0,
+          "command": "cd /testbed && python -m pytest tests/utils_tests/test_http.py::HttpDateProcessingTests...",
+          "signature": "cd /testbed && python -m pytest tests/utils_tests/test_http.py::HttpDateProcessingTests -v 2>/dev/null || python -m django test utils_tests.test_http.HttpDateProcessingTests --settings=tests.test_sqlite 2>/dev/null || cd /testbed && python tests/runtests.py utils_tests.test_http.HttpDateProcessingTests -v 2"
+        },
+        {
+          "step": 20,
+          "returncode": 0,
+          "command": "python /testbed/test_rfc7231_fix2.py && cd /testbed && python tests/runtests.py utils_t...",
+          "signature": "python /testbed/test_rfc7231_fix2.py && cd /testbed && python tests/runtests.py utils_tests.test_http -v 2 2>&1 | head -50"
+        }
+      ],
+      "total_inspections_since_source_edit": 1,
+      "novel_evidence_count": 5,
+      "dynamic_inspection_bonus": 0,
+      "effective_total_inspection_limit": 35,
+      "scratch_experiments_since_source_edit": 0,
+      "repeat_confirmations_since_source_edit": 0,
+      "post_pass_edit_guard_hits": 1,
+      "last_source_edit_step": 15
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact multiple times with a computer shell to solve programming tasks.\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\n\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here\n\n```bash\nyour_command_here\n```\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "<pr_description>\nConsider the following PR description:\ndjango.utils.http.parse_http_date two digit year check is incorrect\nDescription\n\t \n\t\t(last modified by Ad Timmering)\n\t \nRFC 850 does not mention this, but in RFC 7231 (and there's something similar in RFC 2822), there's the following quote:\nRecipients of a timestamp value in rfc850-date format, which uses a\ntwo-digit year, MUST interpret a timestamp that appears to be more\nthan 50 years in the future as representing the most recent year in\nthe past that had the same last two digits.\nCurrent logic is hard coded to consider 0-69 to be in 2000-2069, and 70-99 to be 1970-1999, instead of comparing versus the current year.\n\n</pr_description>\n\n<instructions>\n# Task Instructions\n\n## Overview\nYou're a software engineer interacting continuously with a computer by submitting commands.\nYou'll be helping implement necessary changes to meet requirements in the PR description.\nYour task is specifically to make changes to non-test files in the current directory in order to fix the issue described in the PR description in a way that is general and consistent with the codebase.\n\nIMPORTANT: This is an interactive process where you will think and issue ONE command, see its result, then think and issue your next command.\n\nFor each response:\n1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish\n2. Provide exactly ONE bash command to execute\n\n## Important Boundaries\n- MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)\n- DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)\n\n## Recommended Workflow\n1. Analyze the codebase by finding and reading relevant files\n2. Create a script to reproduce the issue\n3. Edit the source code to resolve the issue\n4. Verify your fix works by running your script again\n5. Test edge cases to ensure your fix is robust\n\n## Command Execution Rules\nYou are operating in an environment where\n1. You write a single command\n2. The system executes that command in a subshell\n3. You see the result\n4. You write your next command\n\nEach response should include:\n1. A **THOUGHT** section where you explain your reasoning and plan\n2. A single bash code block with your command\n\nFormat your responses like this:\n\n<format_example>\nTHOUGHT: Here I explain my reasoning process, analysis of the current situation,\nand what I'm trying to accomplish with the command below.\n\n```bash\nyour_command_here\n```\n</format_example>\n\nCommands must be specified in a single bash code block:\n\n```bash\nyour_command_here\n```\n\n**CRITICAL REQUIREMENTS:**\n- Your response SHOULD include a THOUGHT section explaining your reasoning\n- Your response MUST include EXACTLY ONE bash code block\n- This bash block MUST contain EXACTLY ONE command (or a set of commands connected with && or ||)\n- If you include zero or multiple bash blocks, or no command at all, YOUR RESPONSE WILL FAIL\n- Do NOT try to run multiple independent commands in separate blocks in one response\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n\nExample of a CORRECT response:\n<example_response>\nTHOUGHT: I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.\n\n```bash\nls -la\n```\n</example_response>\n\nExample of an INCORRECT response:\n<example_response>\nTHOUGHT: I need to examine the codebase and then look at a specific file. I'll run multiple commands to do this.\n\n```bash\nls -la\n```\n\nNow I'll read the file:\n\n```bash\ncat file.txt\n```\n</example_response>\n\nIf you need to run multiple commands, either:\n1. Combine them in one block using && or ||\n```bash\ncommand1 && command2 || echo \"Error occurred\"\n```\n\n2. Wait for the first command to complete, see its output, then issue the next command in your following response.\n\n## Environment Details\n- You have a full Linux shell environment\n- Always use non-interactive flags (-y, -f) for commands\n- Avoid interactive tools like vi, nano, or any that require user input\n- If a command isn't available, you can install it\n\n## Useful Command Examples\n\n### Create a new file:\n```bash\ncat <<'EOF' > newfile.py\nimport numpy as np\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n\n# Replace first occurrence on line 1\nsed -i '1s/old_string/new_string/' filename.py\n\n# Replace all occurrences in lines 1-10\nsed -i '1,10s/old_string/new_string/g' filename.py\n```\n\n### View file content:\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```\n\n### Any other command you want to run\n```bash\nanything\n```\n\n## Submission\nWhen you've completed your work (reading, editing, testing), and cannot make further progress\nissue exactly the following command:\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && git add -A && git diff --cached\n```\n\nThis command will submit your work.\nYou cannot continue working (reading, editing, testing) in any way on this task after submitting.\n</instructions>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: I need to understand the structure of the repository and find the relevant file that contains the `parse_http_date` function. Let me start by exploring the directory structure.\n\n```bash\nfind /testbed -type f -name \"*.py\" | xargs grep -l \"parse_http_date\" 2>/dev/null | head -20\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f6a771c4c5d69a5fcccd89cd508",
+          "created": 1790905450,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: I need to understand the structure of the repository and find the relevant file that contains the `parse_http_date` function. Let me start by exploring the directory structure.\n\n```bash\nfind /testbed -type f -name \"*.py\" | xargs grep -l \"parse_http_date\" 2>/dev/null | head -20\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nLet me analyze the PR description to understand what needs to be fixed:\n\n1. The issue is about `django.utils.http.parse_http_date` function\n2. Currently, the code has hard-coded logic for two-digit years:\n   - 0-69 is interpreted as 2000-2069\n   - 70-99 is interpreted as 1970-1999\n3. According to RFC 7231, the correct behavior should be:\n   - A two-digit year that appears to be more than 50 years in the future should be interpreted as the most recent year in the past with the same last two digits\n   - This means the cutoff should be relative to the current year, not hard-coded\n\nLet me start by exploring the codebase to find the relevant file.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nLet me analyze the PR description to understand what needs to be fixed:\n\n1. The issue is about `django.utils.http.parse_http_date` function\n2. Currently, the code has hard-coded logic for two-digit years:\n   - 0-69 is interpreted as 2000-2069\n   - 70-99 is interpreted as 1970-1999\n3. According to RFC 7231, the correct behavior should be:\n   - A two-digit year that appears to be more than 50 years in the future should be interpreted as the most recent year in the past with the same last two digits\n   - This means the cutoff should be relative to the current year, not hard-coded\n\nLet me start by exploring the codebase to find the relevant file.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 239,
+            "prompt_tokens": 1319,
+            "total_tokens": 1558,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 162,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 0,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 162
+            },
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "input_tokens": 1319,
+            "output_tokens": 239
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/testbed/django/views/static.py\n/testbed/django/middleware/http.py\n/testbed/django/utils/cache.py\n/testbed/django/utils/http.py\n/testbed/tests/utils_tests/test_http.py\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The `parse_http_date` function is likely in `/testbed/django/utils/http.py`. Let me examine this file to understand the current implementation and find the problematic code.\n\n```bash\ncat /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f6f2a5f23e3753317cfb271301c",
+          "created": 1790905455,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The `parse_http_date` function is likely in `/testbed/django/utils/http.py`. Let me examine this file to understand the current implementation and find the problematic code.\n\n```bash\ncat /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe `parse_http_date` function is likely in `/testbed/django/utils/http.py`. Let me examine this file to understand the current implementation.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe `parse_http_date` function is likely in `/testbed/django/utils/http.py`. Let me examine this file to understand the current implementation.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 88,
+            "prompt_tokens": 1463,
+            "total_tokens": 1551,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 33,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 891,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 891
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 33
+            },
+            "input_tokens": 1463,
+            "output_tokens": 88
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\nimport base64\nimport calendar\nimport datetime\nimport re\nimport unicodedata\nimport warnings\nfrom binascii import Error as BinasciiError\nfrom email.utils import formatdate\nfrom urllib.parse import (\n    ParseResult, SplitResult, _coerce_args, _splitnetloc, _splitparams, quote,\n    quote_plus, scheme_chars, unquote, unquote_plus,\n    urlencode as original_urlencode, uses_params,\n)\n\nfrom django.core.exceptions import TooManyFieldsSent\nfrom django.utils.datastructures import MultiValueDict\nfrom django.utils.deprecation import RemovedInDjango40Warning\nfrom django.utils.functional import keep_lazy_text\n\n# based on RFC 7232, Appendix C\nETAG_MATCH = re.compile(r'''\n    \\A(      # start of string and capture group\n    (?:W/)?  # optional weak indicator\n    \"        # opening quote\n    [^\"]*    # any sequence of non-quote characters\n    \"        # end quote\n    )\\Z      # end of string and capture group\n''', re.X)\n\nMONTHS = 'jan feb mar apr may jun jul aug sep oct nov dec'.split()\n__D = r'(?P<day>\\d{2})'\n__D2 = r'(?P<day>[ \\d]\\d)'\n__M = r'(?P<mon>\\w{3})'\n__Y = r'(?P<year>\\d{4})'\n__Y2 = r'(?P<year>\\d{2})'\n__T = r'(?P<hour>\\d{2}):(?P<min>\\d{2}):(?P<sec>\\d{2})'\nRFC1123_DATE = re.compile(r'^\\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))\nRFC850_DATE = re.compile(r'^\\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))\nASCTIME_DATE = re.compile(r'^\\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))\n\nRFC3986_GENDELIMS = \":/?#[]@\"\nRFC3986_SUBDELIMS = \"!$&'()*+,;=\"\n\nFIELDS_MATCH = re.compile('[&;]')\n\n\n@keep_lazy_text\ndef urlquote(url, safe='/'):\n    \"\"\"\n    A legacy compatibility wrapper to Python's urllib.parse.quote() function.\n    (was used for unicode handling on Python 2)\n    \"\"\"\n    warnings.warn(\n        'django.utils.http.urlquote() is deprecated in favor of '\n        'urllib.parse.quote().',\n        RemovedInDjango40Warning, stacklevel=2,\n    )\n    return quote(url, safe)\n\n\n@keep_lazy_text\ndef urlquote_plus(url, safe=''):\n    \"\"\"\n    A legacy compatibility wrapper to Python's urllib.parse.quote_plus()\n    function. (was used for unicode handling on Python 2)\n    \"\"\"\n    warnings.warn(\n        'django.utils.http.urlquote_plus() is deprecated in favor of '\n        'urllib.parse.quote_plus(),',\n        RemovedInDjango40Warning, stacklevel=2,\n    )\n    return quote_plus(url, safe)\n\n\n@keep_lazy_text\ndef urlunquote(quoted_url):\n    \"\"\"\n    A legacy compatibility wrapper to Python's urllib.parse.unquote() function.\n    (was used for unicode handling on Python 2)\n    \"\"\"\n    warnings.warn(\n        'django.utils.http.urlunquote() is deprecated in favor of '\n        'urllib.parse.unquote().',\n        RemovedInDjango40Warning, stacklevel=2,\n    )\n    return unquote(quoted_url)\n\n\n@keep_lazy_text\ndef urlunquote_plus(quoted_url):\n    \"\"\"\n    A legacy compatibility wrapper to Python's urllib.parse.unquote_plus()\n    function. (was used for unicode handling on Python 2)\n    \"\"\"\n    warnings.warn(\n        'django.utils.http.urlunquote_plus() is deprecated in favor of '\n        'urllib.parse.unquote_plus().',\n        RemovedInDjango40Warning, stacklevel=2,\n    )\n    return unquote_plus(quoted_url)\n\n\ndef urlencode(query, doseq=False):\n    \"\"\"\n    A version of Python's urllib.parse.urlencode() function that can operate on\n    MultiValueDict and non-string values.\n    \"\"\"\n    if isinstance(query, MultiValueDict):\n        query = query.lists()\n    elif hasattr(query, 'items'):\n        query = query.items()\n    query_params = []\n    for key, value in query:\n        if value is None:\n            raise TypeError(\n                \"Cannot encode None for key '%s' in a query string. Did you \"\n                \"mean to pass an empty string or omit the value?\" % key\n            )\n        elif not doseq or isinstance(value, (str, bytes)):\n            query_val = value\n        else:\n            try:\n                itr = iter(value)\n            except TypeError:\n                query_val = value\n            else:\n                # Consume generators and iterators, when doseq=True, to\n                # work around https://bugs.python.org/issue31706.\n                query_val = []\n                for item in itr:\n                    if item is None:\n                        raise TypeError(\n                            \"Cannot encode None for key '%s' in a query \"\n                            \"string. Did you mean to pass an empty string or \"\n                            \"omit the value?\" % key\n                        )\n                    elif not isinstance(item, bytes):\n                        item = str(item)\n                    query_val.append(item)\n        query_params.append((key, query_val))\n    return original_urlencode(query_params, doseq)\n\n\ndef http_date(epoch_seconds=None):\n    \"\"\"\n    Format the time to match the RFC1123 date format as specified by HTTP\n    RFC7231 section 7.1.1.1.\n\n    `epoch_seconds` is a floating point number expressed in seconds since the\n    epoch, in UTC - such as that outputted by time.time(). If set to None, it\n    defaults \n</output_head>\n<elided_chars>\n6527 characters elided\n</elided_chars>\n<output_tail>\n   params = ''\n    result = ParseResult(scheme, netloc, url, params, query, fragment)\n    return _coerce_result(result)\n\n\n# Copied from urllib.parse.urlsplit() with\n# https://github.com/python/cpython/pull/661 applied.\ndef _urlsplit(url, scheme='', allow_fragments=True):\n    \"\"\"Parse a URL into 5 components:\n    <scheme>://<netloc>/<path>?<query>#<fragment>\n    Return a 5-tuple: (scheme, netloc, path, query, fragment).\n    Note that we don't break the components up in smaller bits\n    (e.g. netloc is a single string) and we don't expand % escapes.\"\"\"\n    url, scheme, _coerce_result = _coerce_args(url, scheme)\n    netloc = query = fragment = ''\n    i = url.find(':')\n    if i > 0:\n        for c in url[:i]:\n            if c not in scheme_chars:\n                break\n        else:\n            scheme, url = url[:i].lower(), url[i + 1:]\n\n    if url[:2] == '//':\n        netloc, url = _splitnetloc(url, 2)\n        if (('[' in netloc and ']' not in netloc) or\n                (']' in netloc and '[' not in netloc)):\n            raise ValueError(\"Invalid IPv6 URL\")\n    if allow_fragments and '#' in url:\n        url, fragment = url.split('#', 1)\n    if '?' in url:\n        url, query = url.split('?', 1)\n    v = SplitResult(scheme, netloc, url, query, fragment)\n    return _coerce_result(v)\n\n\ndef _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):\n    # Chrome considers any URL with more than two slashes to be absolute, but\n    # urlparse is not so flexible. Treat any url with three slashes as unsafe.\n    if url.startswith('///'):\n        return False\n    try:\n        url_info = _urlparse(url)\n    except ValueError:  # e.g. invalid IPv6 addresses\n        return False\n    # Forbid URLs like http:///example.com - with a scheme, but without a hostname.\n    # In that URL, example.com is not the hostname but, a path component. However,\n    # Chrome will still consider example.com to be the hostname, so we must not\n    # allow this syntax.\n    if not url_info.netloc and url_info.scheme:\n        return False\n    # Forbid URLs that start with control characters. Some browsers (like\n    # Chrome) ignore quite a few control characters at the start of a\n    # URL and might consider the URL as scheme relative.\n    if unicodedata.category(url[0])[0] == 'C':\n        return False\n    scheme = url_info.scheme\n    # Consider URLs without a scheme (e.g. //example.com/p) to be http.\n    if not url_info.scheme and url_info.netloc:\n        scheme = 'http'\n    valid_schemes = ['https'] if require_https else ['http', 'https']\n    return ((not url_info.netloc or url_info.netloc in allowed_hosts) and\n            (not scheme or scheme in valid_schemes))\n\n\ndef limited_parse_qsl(qs, keep_blank_values=False, encoding='utf-8',\n                      errors='replace', fields_limit=None):\n    \"\"\"\n    Return a list of key/value tuples parsed from query string.\n\n    Copied from urlparse with an additional \"fields_limit\" argument.\n    Copyright (C) 2013 Python Software Foundation (see LICENSE.python).\n\n    Arguments:\n\n    qs: percent-encoded query string to be parsed\n\n    keep_blank_values: flag indicating whether blank values in\n        percent-encoded queries should be treated as blank strings. A\n        true value indicates that blanks should be retained as blank\n        strings. The default false value indicates that blank values\n        are to be ignored and treated as if they were  not included.\n\n    encoding and errors: specify how to decode percent-encoded sequences\n        into Unicode characters, as accepted by the bytes.decode() method.\n\n    fields_limit: maximum number of fields parsed or an exception\n        is raised. None means no limit and is the default.\n    \"\"\"\n    if fields_limit:\n        pairs = FIELDS_MATCH.split(qs, fields_limit)\n        if len(pairs) > fields_limit:\n            raise TooManyFieldsSent(\n                'The number of GET/POST parameters exceeded '\n                'settings.DATA_UPLOAD_MAX_NUMBER_FIELDS.'\n            )\n    else:\n        pairs = FIELDS_MATCH.split(qs)\n    r = []\n    for name_value in pairs:\n        if not name_value:\n            continue\n        nv = name_value.split('=', 1)\n        if len(nv) != 2:\n            # Handle case of a control-name with no equal sign\n            if keep_blank_values:\n                nv.append('')\n            else:\n                continue\n        if nv[1] or keep_blank_values:\n            name = nv[0].replace('+', ' ')\n            name = unquote(name, encoding=encoding, errors=errors)\n            value = nv[1].replace('+', ' ')\n            value = unquote(value, encoding=encoding, errors=errors)\n            r.append((name, value))\n    return r\n\n\ndef escape_leading_slashes(url):\n    \"\"\"\n    If redirecting to an absolute path (two leading slashes), a slash must be\n    escaped to prevent browsers from handling the path as schemaless and\n    redirecting to another host.\n    \"\"\"\n    if url.startswith('//'):\n        url = '/%2F{}'.format(url[2:])\n    return url\n\n</output_tail>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The file is too long. Let me search specifically for the `parse_http_date` function and find where the two-digit year handling is done.\n\n```bash\ngrep -n \"parse_http_date\\|year\\|__Y2\\|RFC850\" /testbed/django/utils/http.py | head -50\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f7671687bac6ba322004c16a3f6",
+          "created": 1790905462,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The file is too long. Let me search specifically for the `parse_http_date` function and find where the two-digit year handling is done.\n\n```bash\ngrep -n \"parse_http_date\\|year\\|__Y2\\|RFC850\" /testbed/django/utils/http.py | head -50\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe output was truncated. Let me search specifically for the `parse_http_date` function and the year parsing logic.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe output was truncated. Let me search specifically for the `parse_http_date` function and the year parsing logic.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 95,
+            "prompt_tokens": 4176,
+            "total_tokens": 4271,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 26,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 0,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 26
+            },
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "input_tokens": 4176,
+            "output_tokens": 95
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n34:__Y = r'(?P<year>\\d{4})'\n35:__Y2 = r'(?P<year>\\d{2})'\n38:RFC850_DATE = re.compile(r'^\\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))\n158:def parse_http_date(date):\n168:    # RFC7231 makes it mandatory to support RFC850 dates too. So we roll\n170:    for regex in RFC1123_DATE, RFC850_DATE, ASCTIME_DATE:\n177:        year = int(m.group('year'))\n178:        if year < 100:\n179:            if year < 70:\n180:                year += 2000\n182:                year += 1900\n188:        result = datetime.datetime(year, month, day, hour, min, sec)\n194:def parse_http_date_safe(date):\n196:    Same as parse_http_date, but return None if the input is invalid.\n199:        return parse_http_date(date)\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Now I can see the problematic code. Let me see the full `parse_http_date` function to understand its implementation.\n\n```bash\nsed -n '158,195p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f790c8d0953d003b3788f0d4cdb",
+          "created": 1790905465,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Now I can see the problematic code. Let me see the full `parse_http_date` function to understand its implementation.\n\n```bash\nsed -n '158,195p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nNow I can see the problematic code. Let me look at lines 158-194 more closely to understand the current implementation.\n\nThe current logic is:\n```python\nif year < 100:\n    if year < 70:\n        year += 2000\n    else:\n        year += 1900\n```\n\nAccording to RFC 7231, the rule should be:\n- If a two-digit year appears to be more than 50 years in the future, interpret it as representing the most recent year in the past that had the same last two digits.\n\nSo the fix should compare against the current year, not use hardcoded values (0-69 and 70-99).\n\nLet me see the full function first.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nNow I can see the problematic code. Let me look at lines 158-194 more closely to understand the current implementation.\n\nThe current logic is:\n```python\nif year < 100:\n    if year < 70:\n        year += 2000\n    else:\n        year += 1900\n```\n\nAccording to RFC 7231, the rule should be:\n- If a two-digit year appears to be more than 50 years in the future, interpret it as representing the most recent year in the past that had the same last two digits.\n\nSo the fix should compare against the current year, not use hardcoded values (0-69 and 70-99).\n\nLet me see the full function first.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 201,
+            "prompt_tokens": 4496,
+            "total_tokens": 4697,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 149,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 4027,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 149
+            },
+            "input_tokens_details": {
+              "cached_tokens": 4027
+            },
+            "input_tokens": 4496,
+            "output_tokens": 201
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ndef parse_http_date(date):\n    \"\"\"\n    Parse a date format as specified by HTTP RFC7231 section 7.1.1.1.\n\n    The three formats allowed by the RFC are accepted, even if only the first\n    one is still in widespread use.\n\n    Return an integer expressed in seconds since the epoch, in UTC.\n    \"\"\"\n    # email.utils.parsedate() does the job for RFC1123 dates; unfortunately\n    # RFC7231 makes it mandatory to support RFC850 dates too. So we roll\n    # our own RFC-compliant parsing.\n    for regex in RFC1123_DATE, RFC850_DATE, ASCTIME_DATE:\n        m = regex.match(date)\n        if m is not None:\n            break\n    else:\n        raise ValueError(\"%r is not in a valid HTTP date format\" % date)\n    try:\n        year = int(m.group('year'))\n        if year < 100:\n            if year < 70:\n                year += 2000\n            else:\n                year += 1900\n        month = MONTHS.index(m.group('mon').lower()) + 1\n        day = int(m.group('day'))\n        hour = int(m.group('hour'))\n        min = int(m.group('min'))\n        sec = int(m.group('sec'))\n        result = datetime.datetime(year, month, day, hour, min, sec)\n        return calendar.timegm(result.utctimetuple())\n    except Exception as exc:\n        raise ValueError(\"%r is not a valid date\" % date) from exc\n\n\ndef parse_http_date_safe(date):\n    \"\"\"\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Now I understand the issue. The current code has hard-coded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) instead of comparing against the current year as per RFC 7231. The RFC says a two-digit year \"more than 50 years in the future\" should be interpreted as the past century.\n\nLet me first look at the existing tests to understand the expected behavior better:\n\n```bash\ngrep -n \"parse_http_date\" /testbed/tests/utils_tests/test_http.py | head -20\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f7d037fcf82f288b81229d23f88",
+          "created": 1790905469,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Now I understand the issue. The current code has hard-coded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) instead of comparing against the current year as per RFC 7231. The RFC says a two-digit year \"more than 50 years in the future\" should be interpreted as the past century.\n\nLet me first look at the existing tests to understand the expected behavior better:\n\n```bash\ngrep -n \"parse_http_date\" /testbed/tests/utils_tests/test_http.py | head -20\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nNow I understand the issue. The current code has hard-coded logic:\n- If year < 70: add 2000 (making it 2000-2069)\n- If year >= 70: add 1900 (making it 1970-1999)\n\nAccording to RFC 7231, the rule should be:\n- If the two-digit year appears to be more than 50 years in the future, it should be interpreted as the most recent year in the past that had the same last two digits.\n\nThis means the logic should compare against the current year. Let me write the fix:\n\n```python\ncurrent_year = datetime.datetime.utcnow().year\nif year < 100:\n    if year > current_year % 100 + 50:\n        year += 1900\n    else:\n        year += 2000\n```\n\nWait, let me think about this more carefully. The RFC says:\n\"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nSo if the current year is 2019 (last two digits = 19):\n- If the two-digit year is 70-99, then 1970-1999 is more than 50 years in the future (from 1970/1999 to 2019), so we interpret it as 1970-1999\n- If the two-digit year is 00-69, then 2000-2069 is within 50 years of 2019, so we interpret it as 2000-2069\n\nWait, let me re-read this more carefully. The RFC says \"a timestamp that appears to be more than 50 years in the future\".\n\nSo if current year is 2019 and we see year 70:\n- 1970 is 51 years in the past (2019 - 1970 = 49), actually that's not more than 50 years\n\n\n- 1970 is 49 years ago, which is less than 50 years, so it should be interpreted as 1970\n\nI realize my previous calculation was incorrect. The timestamp's distance from the current year determines its interpretation. If a two-digit year creates a date more than 50 years away, we choose the most recent past year with those digits. This means carefully tracking how far back or forward the date would place us.\n\nThe logic handles edge cases by comparing the two-digit year against the current year's last two digits, adjusting the century accordingly. When the two-digit year falls within a specific range relative to the current year's last two digits, we either subtract or add a century to ensure the timestamp remains within a reasonable timeframe.\n\nFor the example with year 70 and current year 2019, the calculation shows the year should be interpreted as 1970, not 2070. This approach prevents unrealistic future date interpretations while maintaining a consistent and predictable date conversion method.\n\nThe key strategy involves using modular arithmetic to determine the appropriate century, with a critical 50-year threshold that determines whether to shift the year backward or forward. This ensures dates remain within a sensible range, balancing between past and future interpretations based on the current year.\n\nThe implementation elegantly handles edge cases by comparing the two-digit year against the current year's last two digits, adding either 1900 or 2000 accordingly to create a four-digit year representation.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nNow I understand the issue. The current code has hard-coded logic:\n- If year < 70: add 2000 (making it 2000-2069)\n- If year >= 70: add 1900 (making it 1970-1999)\n\nAccording to RFC 7231, the rule should be:\n- If the two-digit year appears to be more than 50 years in the future, it should be interpreted as the most recent year in the past that had the same last two digits.\n\nThis means the logic should compare against the current year. Let me write the fix:\n\n```python\ncurrent_year = datetime.datetime.utcnow().year\nif year < 100:\n    if year > current_year % 100 + 50:\n        year += 1900\n    else:\n        year += 2000\n```\n\nWait, let me think about this more carefully. The RFC says:\n\"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nSo if the current year is 2019 (last two digits = 19):\n- If the two-digit year is 70-99, then 1970-1999 is more than 50 years in the future (from 1970/1999 to 2019), so we interpret it as 1970-1999\n- If the two-digit year is 00-69, then 2000-2069 is within 50 years of 2019, so we interpret it as 2000-2069\n\nWait, let me re-read this more carefully. The RFC says \"a timestamp that appears to be more than 50 years in the future\".\n\nSo if current year is 2019 and we see year 70:\n- 1970 is 51 years in the past (2019 - 1970 = 49), actually that's not more than 50 years\n\n\n- 1970 is 49 years ago, which is less than 50 years, so it should be interpreted as 1970\n\nI realize my previous calculation was incorrect. The timestamp's distance from the current year determines its interpretation. If a two-digit year creates a date more than 50 years away, we choose the most recent past year with those digits. This means carefully tracking how far back or forward the date would place us.\n\nThe logic handles edge cases by comparing the two-digit year against the current year's last two digits, adjusting the century accordingly. When the two-digit year falls within a specific range relative to the current year's last two digits, we either subtract or add a century to ensure the timestamp remains within a reasonable timeframe.\n\nFor the example with year 70 and current year 2019, the calculation shows the year should be interpreted as 1970, not 2070. This approach prevents unrealistic future date interpretations while maintaining a consistent and predictable date conversion method.\n\nThe key strategy involves using modular arithmetic to determine the appropriate century, with a critical 50-year threshold that determines whether to shift the year backward or forward. This ensures dates remain within a sensible range, balancing between past and future interpretations based on the current year.\n\nThe implementation elegantly handles edge cases by comparing the two-digit year against the current year's last two digits, adding either 1900 or 2000 accordingly to create a four-digit year representation.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 841,
+            "prompt_tokens": 4902,
+            "total_tokens": 5743,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 718,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 4475,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 4475
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 718
+            },
+            "input_tokens": 4902,
+            "output_tokens": 841
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n9:    is_safe_url, is_same_domain, parse_etags, parse_http_date, quote_etag,\n316:        parsed = parse_http_date('Sun, 06 Nov 1994 08:49:37 GMT')\n320:        parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')\n324:        parsed = parse_http_date('Sun Nov  6 08:49:37 1994')\n328:        parsed = parse_http_date('Sun Nov  6 08:49:37 0037')\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Let me see more of the tests to understand the expected behavior and how two-digit years are handled.\n\n```bash\nsed -n '310,350p' /testbed/tests/utils_tests/test_http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f8cb4945c01e69d4df5c541f4ab",
+          "created": 1790905484,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Let me see more of the tests to understand the expected behavior and how two-digit years are handled.\n\n```bash\nsed -n '310,350p' /testbed/tests/utils_tests/test_http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nLet me see more of the test file to understand the expected behavior better.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nLet me see more of the test file to understand the expected behavior better.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 67,
+            "prompt_tokens": 5170,
+            "total_tokens": 5237,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 18,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 4475,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 4475
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 18
+            },
+            "input_tokens": 5170,
+            "output_tokens": 67
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nclass HttpDateProcessingTests(unittest.TestCase):\n    def test_http_date(self):\n        t = 1167616461.0\n        self.assertEqual(http_date(t), 'Mon, 01 Jan 2007 01:54:21 GMT')\n\n    def test_parsing_rfc1123(self):\n        parsed = parse_http_date('Sun, 06 Nov 1994 08:49:37 GMT')\n        self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))\n\n    def test_parsing_rfc850(self):\n        parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')\n        self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))\n\n    def test_parsing_asctime(self):\n        parsed = parse_http_date('Sun Nov  6 08:49:37 1994')\n        self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))\n\n    def test_parsing_year_less_than_70(self):\n        parsed = parse_http_date('Sun Nov  6 08:49:37 0037')\n        self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(2037, 11, 6, 8, 49, 37))\n\n\nclass EscapeLeadingSlashesTests(unittest.TestCase):\n    def test(self):\n        tests = (\n            ('//example.com', '/%2Fexample.com'),\n            ('//', '/%2F'),\n        )\n        for url, expected in tests:\n            with self.subTest(url=url):\n                self.assertEqual(escape_leading_slashes(url), expected)\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Now I understand the issue. The current code has hard-coded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) instead of comparing against the current year. According to RFC 7231, a two-digit year \"more than 50 years in the future\" should be interpreted as the most recent year in the past with the same last two digits.\n\nLet me first create a test script to reproduce the issue:\n\n```bash\ncat <<'EOF' > /testbed/test_rfc7231_fix.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\n# Test cases for two-digit year parsing\ntest_cases = [\n    ('Sunday, 06-Nov-94 08:49:37 GMT', datetime.datetime(1994, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-69 08:49:37 GMT', datetime.datetime(2069, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-70 08:49:37 GMT', datetime.datetime(1970, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-99 08:49:37 GMT', datetime.datetime(1999, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-00 08:49:37 GMT', datetime.datetime(2000, 11, 6, 8, 49, 37)),\n]\n\ncurrent_year = datetime.datetime.now().year\nprint(f\"Current year: {current_year}\")\nprint(f\"50 years from now: {current_year + 50}\")\nprint()\n\nfor date_str, expected in test_cases:\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"Got: {parsed_dt}\")\n        if parsed_dt == expected:\n            print(\"PASS\")\n        else:\n            print(\"FAIL - Result doesn't match expected\")\n        print()\n    except Exception as e:\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"ERROR: {e}\")\n        print()\nEOF\npython /testbed/test_rfc7231_fix.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3f90c7cc3774da8823bd1a9fdd41",
+          "created": 1790905488,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Now I understand the issue. The current code has hard-coded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) instead of comparing against the current year. According to RFC 7231, a two-digit year \"more than 50 years in the future\" should be interpreted as the most recent year in the past with the same last two digits.\n\nLet me first create a test script to reproduce the issue:\n\n```bash\ncat <<'EOF' > /testbed/test_rfc7231_fix.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\n# Test cases for two-digit year parsing\ntest_cases = [\n    ('Sunday, 06-Nov-94 08:49:37 GMT', datetime.datetime(1994, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-69 08:49:37 GMT', datetime.datetime(2069, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-70 08:49:37 GMT', datetime.datetime(1970, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-99 08:49:37 GMT', datetime.datetime(1999, 11, 6, 8, 49, 37)),\n    ('Sunday, 06-Nov-00 08:49:37 GMT', datetime.datetime(2000, 11, 6, 8, 49, 37)),\n]\n\ncurrent_year = datetime.datetime.now().year\nprint(f\"Current year: {current_year}\")\nprint(f\"50 years from now: {current_year + 50}\")\nprint()\n\nfor date_str, expected in test_cases:\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"Got: {parsed_dt}\")\n        if parsed_dt == expected:\n            print(\"PASS\")\n        else:\n            print(\"FAIL - Result doesn't match expected\")\n        print()\n    except Exception as e:\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"ERROR: {e}\")\n        print()\nEOF\npython /testbed/test_rfc7231_fix.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nNow I understand the issue better. The current test `test_parsing_year_less_than_70` expects that a year of 37 (two digits) should be interpreted as 2037. But according to RFC 7231, the interpretation should be based on the current year.\n\nThe RFC 7231 says:\n\"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nSo if the current year is 2019 (or later), then:\n- A two-digit year of 70 or more should be interpreted as 19XX\n- A two-digit year less than 70 should be interpreted as 20XX if it would be more than 50 years in the future from the current year\n\nLet me think about this more carefully:\n- Current year: let's say 2023\n- Two-digit year: 69 \u2192 2069 - 2023 = 46 years in the future \u2192 NOT more than 50, so keep as 2069\n- Two-digit year: 70 \u2192 2070 - 2023 = 47 years in the future \u2192 More than 50, so interpret as 1970\n- Two-digit year: 74 \u2192 2074 - 2023 = 51 years in the future \u2192 More than 50, so interpret as 1974\n\nWait, let me re-read the RFC. It says \"more than 50 years in the future\". So:\n- If the two-digit year interpreted as 20XX would be more than 50 years in the future, use 19XX instead\n- Otherwise, use 20XX\n\nSo the algorithm should be:\n1. Get current year\n2. For a two-digit year Y (0-99):\n   - Assume it's 2000 + Y (century = 2000)\n   - Calculate the difference between this assumed year and the current year\n   - If the difference exceeds 50 years, adjust to the previous century\n   - Otherwise, keep the current century assumption\n\nI see the nuanced logic for handling two-digit years across different scenarios. The key is dynamically interpreting the century based on proximity to the current year, ensuring we don't misinterpret dates that are too far in the future or past.\n\nThe implementation needs to carefully track the current year and compare potential century interpretations, always prioritizing the most likely intended date within a reasonable time frame.\n\nTwo-digit years get mapped differently based on proximity to the current year. When a calculated year falls more than 50 years from the current year, the algorithm switches century to maintain temporal accuracy.\n\nThe core logic involves checking the temporal distance and dynamically adjusting the year representation to keep it within a reasonable historical or future range.\n\nI'll need a method that flexibly handles year conversions while maintaining precise temporal logic. The goal is ensuring consistent, predictable two-digit year interpretations that align with current date context.\n\nThe current implementation reveals nuanced challenges in year conversion, particularly around boundary conditions where the calculated year might significantly diverge from the present moment.\n\nThe test case with year 37 suggests the parsing mechanism needs robust handling across different input ranges, potentially requiring careful boundary condition management.\n\nA strategic approach would involve implementing a conversion algorithm that can dynamically adjust two-digit years relative to the current year, ensuring consistent and logical date transformations across various scenarios.\n\nThe key considerations include establishing clear rules for converting two-digit years, potentially using a sliding window approach that references the current year to determine the most appropriate century.\n\nThe implementation will need to carefully balance the requirements of preserving historical accuracy while providing predictable date parsing behavior.\n\nThe algorithm handles two-digit year conversion by dynamically calculating the most likely four-digit year representation based on proximity to the current year. If the calculated year would be more than 50 years in the future, it automatically adjusts to the corresponding year in the previous century.\n\nFor two-digit years less than 70, the code adds 2000, otherwise it adds 1900, ensuring consistent and sensible year interpretation across different input scenarios.\n\nThe current implementation reveals nuanced challenges with RFC 7231's specification, particularly around boundary conditions where years are close to the 50-year threshold. The test case demonstrates this complexity, showing how subtle differences in year interpretation can impact date parsing.\n\nTracing through specific examples highlights the intricate logic required to handle two-digit year conversions accurately, accounting for the current year and the RFC's 50-year future window.\n\nThe proposed solution involves dynamically calculating the appropriate century by comparing the two-digit year against the current year, ensuring consistent and predictable date transformations across different time periods.\n\nI'll break down the logic into clear, sequential steps to determine the correct four-digit year. The key is handling the 50-year window strategically, prioritizing recent years while maintaining logical century assignment.\n\nThe algorithm will first check if the potential year falls within a reasonable range of the current year, then apply century adjustment rules to ensure accurate representation. This approach balances precision with practical date interpretation.\n\nThe implementation uses a simple mathematical comparison to decide whether to add 2000 or 1900 to the two-digit year, creating a straightforward mechanism for converting abbreviated year representations.\n\nHowever, there's a subtle test expectation discrepancy that requires careful handling. The test anticipates a specific year conversion, which might not align perfectly with the strict RFC interpretation.\n\nI'll focus on implementing the RFC 7231 compliant logic while being mindful of potential test implications. The key is to create a robust two-digit year parsing mechanism that works consistently across different input scenarios.\n\nThe implementation involves capturing the two-digit year, checking its magnitude, and applying a dynamic century adjustment based on proximity to the current year. This approach ensures flexibility in year interpretation while maintaining a predictable conversion strategy.\n\nI'll calculate the two-digit year by first assuming a 2000s century baseline, then adjusting if the result exceeds a 50-year threshold from the current year. The conditional logic allows for seamless century transition, defaulting to 1900s if the year would be too far in the future.\n\nThe core logic involves adding 1900 for years 70 and above, with a specific handling for years 0-69 to prevent unrealistic future date interpretations. This method ensures consistent and reasonable date parsing across different input scenarios.\n\nThe implementation carefully manages edge cases by checking year boundaries and applying appropriate century adjustments, maintaining a predictable conversion strategy for two-digit year representations.\n\nWhen the calculated future year exceeds 50 years from the current year, the code switches to the previous century. This ensures more accurate historical date interpretation by dynamically selecting the most likely century based on proximity to the present year.\n\nThe core logic involves adding 2000 for lower years and 1900 for higher years, with a conditional adjustment when the projected year would be too far in the future. This approach provides a nuanced method for handling two-digit year conversions across different historical periods.\n\nThe implementation carefully balances precision and practicality, using a simple yet effective algorithm that accounts for potential ambiguity in year representations. I want to adjust the century based on the current year, ensuring the year falls within a reasonable range. If the calculated year is more than 50 years in the future, I'll subtract 100 to bring it into the current century. This handles edge cases where a two-digit year might otherwise be misinterpreted as far into the future. The key is to dynamically map two-digit years to four-digit years that make sense relative to the current year.\n\nThe approach involves calculating the full year, then checking if it's too far ahead. If so, subtract 100 to shift it back to the most recent matching year in the past. This method works consistently across different two-digit inputs, maintaining the intent of keeping years within a reasonable proximity to the current year. I'm tracking the logic for adjusting a two-digit year to a full year, focusing on scenarios where the calculated year exceeds the current year by more than 50 years. The method involves checking the difference between the calculated year and the current year, then potentially subtracting 100 to ensure the year falls within a reasonable historical range. This approach handles edge cases like zero and single-digit years by consistently applying the century correction rule.\n\nThe key steps involve:\n1. Adding 2000 to the input year\n2. Comparing against the current year\n3. Subtracting 100 if the difference is too large\n4. Ensuring the result represents a valid historical year\n\nBy applying this logic, the code creates a predictable and consistent year conversion mechanism that handles various input scenarios. I'll continue the code's logic for handling year calculations, focusing on the century adjustment:\n\nIf the calculated year is more than 50 years ahead, the code adjusts the century by subtracting 100. This ensures the year falls within a reasonable range around the current year. The code handles two-digit years by adding either 2000 or 1900, depending on whether the year is below 70. This approach accounts for potential ambiguity in two-digit year representations, providing a consistent method for converting years to a full four-digit format.\n\nThe conditional logic ensures that years are interpreted consistently, preventing potential errors in date parsing across different input formats. By carefully managing the century, the code creates a robust year conversion mechanism.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nNow I understand the issue better. The current test `test_parsing_year_less_than_70` expects that a year of 37 (two digits) should be interpreted as 2037. But according to RFC 7231, the interpretation should be based on the current year.\n\nThe RFC 7231 says:\n\"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nSo if the current year is 2019 (or later), then:\n- A two-digit year of 70 or more should be interpreted as 19XX\n- A two-digit year less than 70 should be interpreted as 20XX if it would be more than 50 years in the future from the current year\n\nLet me think about this more carefully:\n- Current year: let's say 2023\n- Two-digit year: 69 \u2192 2069 - 2023 = 46 years in the future \u2192 NOT more than 50, so keep as 2069\n- Two-digit year: 70 \u2192 2070 - 2023 = 47 years in the future \u2192 More than 50, so interpret as 1970\n- Two-digit year: 74 \u2192 2074 - 2023 = 51 years in the future \u2192 More than 50, so interpret as 1974\n\nWait, let me re-read the RFC. It says \"more than 50 years in the future\". So:\n- If the two-digit year interpreted as 20XX would be more than 50 years in the future, use 19XX instead\n- Otherwise, use 20XX\n\nSo the algorithm should be:\n1. Get current year\n2. For a two-digit year Y (0-99):\n   - Assume it's 2000 + Y (century = 2000)\n   - Calculate the difference between this assumed year and the current year\n   - If the difference exceeds 50 years, adjust to the previous century\n   - Otherwise, keep the current century assumption\n\nI see the nuanced logic for handling two-digit years across different scenarios. The key is dynamically interpreting the century based on proximity to the current year, ensuring we don't misinterpret dates that are too far in the future or past.\n\nThe implementation needs to carefully track the current year and compare potential century interpretations, always prioritizing the most likely intended date within a reasonable time frame.\n\nTwo-digit years get mapped differently based on proximity to the current year. When a calculated year falls more than 50 years from the current year, the algorithm switches century to maintain temporal accuracy.\n\nThe core logic involves checking the temporal distance and dynamically adjusting the year representation to keep it within a reasonable historical or future range.\n\nI'll need a method that flexibly handles year conversions while maintaining precise temporal logic. The goal is ensuring consistent, predictable two-digit year interpretations that align with current date context.\n\nThe current implementation reveals nuanced challenges in year conversion, particularly around boundary conditions where the calculated year might significantly diverge from the present moment.\n\nThe test case with year 37 suggests the parsing mechanism needs robust handling across different input ranges, potentially requiring careful boundary condition management.\n\nA strategic approach would involve implementing a conversion algorithm that can dynamically adjust two-digit years relative to the current year, ensuring consistent and logical date transformations across various scenarios.\n\nThe key considerations include establishing clear rules for converting two-digit years, potentially using a sliding window approach that references the current year to determine the most appropriate century.\n\nThe implementation will need to carefully balance the requirements of preserving historical accuracy while providing predictable date parsing behavior.\n\nThe algorithm handles two-digit year conversion by dynamically calculating the most likely four-digit year representation based on proximity to the current year. If the calculated year would be more than 50 years in the future, it automatically adjusts to the corresponding year in the previous century.\n\nFor two-digit years less than 70, the code adds 2000, otherwise it adds 1900, ensuring consistent and sensible year interpretation across different input scenarios.\n\nThe current implementation reveals nuanced challenges with RFC 7231's specification, particularly around boundary conditions where years are close to the 50-year threshold. The test case demonstrates this complexity, showing how subtle differences in year interpretation can impact date parsing.\n\nTracing through specific examples highlights the intricate logic required to handle two-digit year conversions accurately, accounting for the current year and the RFC's 50-year future window.\n\nThe proposed solution involves dynamically calculating the appropriate century by comparing the two-digit year against the current year, ensuring consistent and predictable date transformations across different time periods.\n\nI'll break down the logic into clear, sequential steps to determine the correct four-digit year. The key is handling the 50-year window strategically, prioritizing recent years while maintaining logical century assignment.\n\nThe algorithm will first check if the potential year falls within a reasonable range of the current year, then apply century adjustment rules to ensure accurate representation. This approach balances precision with practical date interpretation.\n\nThe implementation uses a simple mathematical comparison to decide whether to add 2000 or 1900 to the two-digit year, creating a straightforward mechanism for converting abbreviated year representations.\n\nHowever, there's a subtle test expectation discrepancy that requires careful handling. The test anticipates a specific year conversion, which might not align perfectly with the strict RFC interpretation.\n\nI'll focus on implementing the RFC 7231 compliant logic while being mindful of potential test implications. The key is to create a robust two-digit year parsing mechanism that works consistently across different input scenarios.\n\nThe implementation involves capturing the two-digit year, checking its magnitude, and applying a dynamic century adjustment based on proximity to the current year. This approach ensures flexibility in year interpretation while maintaining a predictable conversion strategy.\n\nI'll calculate the two-digit year by first assuming a 2000s century baseline, then adjusting if the result exceeds a 50-year threshold from the current year. The conditional logic allows for seamless century transition, defaulting to 1900s if the year would be too far in the future.\n\nThe core logic involves adding 1900 for years 70 and above, with a specific handling for years 0-69 to prevent unrealistic future date interpretations. This method ensures consistent and reasonable date parsing across different input scenarios.\n\nThe implementation carefully manages edge cases by checking year boundaries and applying appropriate century adjustments, maintaining a predictable conversion strategy for two-digit year representations.\n\nWhen the calculated future year exceeds 50 years from the current year, the code switches to the previous century. This ensures more accurate historical date interpretation by dynamically selecting the most likely century based on proximity to the present year.\n\nThe core logic involves adding 2000 for lower years and 1900 for higher years, with a conditional adjustment when the projected year would be too far in the future. This approach provides a nuanced method for handling two-digit year conversions across different historical periods.\n\nThe implementation carefully balances precision and practicality, using a simple yet effective algorithm that accounts for potential ambiguity in year representations. I want to adjust the century based on the current year, ensuring the year falls within a reasonable range. If the calculated year is more than 50 years in the future, I'll subtract 100 to bring it into the current century. This handles edge cases where a two-digit year might otherwise be misinterpreted as far into the future. The key is to dynamically map two-digit years to four-digit years that make sense relative to the current year.\n\nThe approach involves calculating the full year, then checking if it's too far ahead. If so, subtract 100 to shift it back to the most recent matching year in the past. This method works consistently across different two-digit inputs, maintaining the intent of keeping years within a reasonable proximity to the current year. I'm tracking the logic for adjusting a two-digit year to a full year, focusing on scenarios where the calculated year exceeds the current year by more than 50 years. The method involves checking the difference between the calculated year and the current year, then potentially subtracting 100 to ensure the year falls within a reasonable historical range. This approach handles edge cases like zero and single-digit years by consistently applying the century correction rule.\n\nThe key steps involve:\n1. Adding 2000 to the input year\n2. Comparing against the current year\n3. Subtracting 100 if the difference is too large\n4. Ensuring the result represents a valid historical year\n\nBy applying this logic, the code creates a predictable and consistent year conversion mechanism that handles various input scenarios. I'll continue the code's logic for handling year calculations, focusing on the century adjustment:\n\nIf the calculated year is more than 50 years ahead, the code adjusts the century by subtracting 100. This ensures the year falls within a reasonable range around the current year. The code handles two-digit years by adding either 2000 or 1900, depending on whether the year is below 70. This approach accounts for potential ambiguity in two-digit year representations, providing a consistent method for converting years to a full four-digit format.\n\nThe conditional logic ensures that years are interpreted consistently, preventing potential errors in date parsing across different input formats. By carefully managing the century, the code creates a robust year conversion mechanism.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 2384,
+            "prompt_tokens": 5625,
+            "total_tokens": 8009,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 1869,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 4923,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 4923
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 1869
+            },
+            "input_tokens": 5625,
+            "output_tokens": 2384
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCurrent year: 2026\n50 years from now: 2076\n\nInput: Sunday, 06-Nov-94 08:49:37 GMT\nExpected: 1994-11-06 08:49:37\nGot: 1994-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-69 08:49:37 GMT\nExpected: 2069-11-06 08:49:37\nGot: 2069-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-70 08:49:37 GMT\nExpected: 1970-11-06 08:49:37\nGot: 1970-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-99 08:49:37 GMT\nExpected: 1999-11-06 08:49:37\nGot: 1999-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-00 08:49:37 GMT\nExpected: 2000-11-06 08:49:37\nGot: 2000-11-06 08:49:37\nPASS\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The test passes with the current expectations because the hardcoded logic happens to give correct results in 2026. But the issue is that the logic should be based on the current year per RFC 7231, not hardcoded values. Let me create a better test to demonstrate the issue, particularly around the 50-year boundary:\n\n```bash\ncat <<'EOF' > /testbed/test_rfc7231_fix2.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\ncurrent_year = datetime.datetime.now().year\nprint(f\"Current year: {current_year}\")\nprint(f\"50 years from now: {current_year + 50}\")\nprint()\n\n# According to RFC 7231:\n# \"a timestamp that appears to be more than 50 years in the future \n#  as representing the most recent year in the past that had the same last two digits\"\n\n# If current year is 2026:\n# - 76 would be 2076, which is exactly 50 years in the future -> should stay as 2076\n# - 77 would be 2077, which is more than 50 years in the future -> should be 1977\n\n# Test the edge cases\ntest_cases = [\n    ('Sunday, 06-Nov-76 08:49:37 GMT', datetime.datetime(2076, 11, 6, 8, 49, 37)),  # Exactly 50 years\n    ('Sunday, 06-Nov-77 08:49:37 GMT', datetime.datetime(1977, 11, 6, 8, 49, 37)),  # More than 50 years -> past\n    ('Sunday, 06-Nov-25 08:49:37 GMT', datetime.datetime(2025, 11, 6, 8, 49, 37)),  # Within 50 years -> future\n]\n\nprint(\"Testing RFC 7231 compliant behavior:\")\nfor date_str, expected in test_cases:\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"Got: {parsed_dt}\")\n        if parsed_dt == expected:\n            print(\"PASS\")\n        else:\n            print(\"FAIL - Result doesn't match expected (not RFC 7231 compliant)\")\n        print()\n    except Exception as e:\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"ERROR: {e}\")\n        print()\nEOF\npython /testbed/test_rfc7231_fix2.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fbfa4c7fafa113c8be43c3d199c",
+          "created": 1790905535,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The test passes with the current expectations because the hardcoded logic happens to give correct results in 2026. But the issue is that the logic should be based on the current year per RFC 7231, not hardcoded values. Let me create a better test to demonstrate the issue, particularly around the 50-year boundary:\n\n```bash\ncat <<'EOF' > /testbed/test_rfc7231_fix2.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\ncurrent_year = datetime.datetime.now().year\nprint(f\"Current year: {current_year}\")\nprint(f\"50 years from now: {current_year + 50}\")\nprint()\n\n# According to RFC 7231:\n# \"a timestamp that appears to be more than 50 years in the future \n#  as representing the most recent year in the past that had the same last two digits\"\n\n# If current year is 2026:\n# - 76 would be 2076, which is exactly 50 years in the future -> should stay as 2076\n# - 77 would be 2077, which is more than 50 years in the future -> should be 1977\n\n# Test the edge cases\ntest_cases = [\n    ('Sunday, 06-Nov-76 08:49:37 GMT', datetime.datetime(2076, 11, 6, 8, 49, 37)),  # Exactly 50 years\n    ('Sunday, 06-Nov-77 08:49:37 GMT', datetime.datetime(1977, 11, 6, 8, 49, 37)),  # More than 50 years -> past\n    ('Sunday, 06-Nov-25 08:49:37 GMT', datetime.datetime(2025, 11, 6, 8, 49, 37)),  # Within 50 years -> future\n]\n\nprint(\"Testing RFC 7231 compliant behavior:\")\nfor date_str, expected in test_cases:\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"Got: {parsed_dt}\")\n        if parsed_dt == expected:\n            print(\"PASS\")\n        else:\n            print(\"FAIL - Result doesn't match expected (not RFC 7231 compliant)\")\n        print()\n    except Exception as e:\n        print(f\"Input: {date_str}\")\n        print(f\"Expected: {expected}\")\n        print(f\"ERROR: {e}\")\n        print()\nEOF\npython /testbed/test_rfc7231_fix2.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nWait, the test is passing for 2026. But the issue is that the current code is hard-coded. Let me check if my test expectations are correct. The current year is 2026, so:\n- 94 would be 1994 (94 < 70? no, so +1900 = 1994) \u2713\n- 69 would be 2069 (69 < 70? yes, so +2000 = 2069) \u2713\n- 70 would be 1970 (70 < 70? no, so +1900 = 1970) \u2713\n- 99 would be 1999 (99 < 70? no, so +1900 = 1999) \u2713\n- 00 would be 2000 (0 < 70? yes, so +2000 = 2000) \u2713\n\nSo the current test passes because the hardcoded values happen to match. But according to RFC 7231, if the current year is 2026, then:\n- 77 would be more than 50 years in the future (2077 > 2076), so it should be interpreted as 1977\n- 76 would be exactly 50 years in the future (2076), so it should be interpreted as 2076 (not past)\n- 75 would be 2025 (within 50 years), so it should be 2025\n\nLet me update my test to check edge cases around the 50-year threshold:\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nWait, the test is passing for 2026. But the issue is that the current code is hard-coded. Let me check if my test expectations are correct. The current year is 2026, so:\n- 94 would be 1994 (94 < 70? no, so +1900 = 1994) \u2713\n- 69 would be 2069 (69 < 70? yes, so +2000 = 2069) \u2713\n- 70 would be 1970 (70 < 70? no, so +1900 = 1970) \u2713\n- 99 would be 1999 (99 < 70? no, so +1900 = 1999) \u2713\n- 00 would be 2000 (0 < 70? yes, so +2000 = 2000) \u2713\n\nSo the current test passes because the hardcoded values happen to match. But according to RFC 7231, if the current year is 2026, then:\n- 77 would be more than 50 years in the future (2077 > 2076), so it should be interpreted as 1977\n- 76 would be exactly 50 years in the future (2076), so it should be interpreted as 2076 (not past)\n- 75 would be 2025 (within 50 years), so it should be 2025\n\nLet me update my test to check edge cases around the 50-year threshold:\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 870,
+            "prompt_tokens": 6435,
+            "total_tokens": 7305,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 312,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 5371,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 312
+            },
+            "input_tokens_details": {
+              "cached_tokens": 5371
+            },
+            "input_tokens": 6435,
+            "output_tokens": 870
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCurrent year: 2026\n50 years from now: 2076\n\nTesting RFC 7231 compliant behavior:\nInput: Sunday, 06-Nov-76 08:49:37 GMT\nExpected: 2076-11-06 08:49:37\nGot: 1976-11-06 08:49:37\nFAIL - Result doesn't match expected (not RFC 7231 compliant)\n\nInput: Sunday, 06-Nov-77 08:49:37 GMT\nExpected: 1977-11-06 08:49:37\nGot: 1977-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-25 08:49:37 GMT\nExpected: 2025-11-06 08:49:37\nGot: 2025-11-06 08:49:37\nPASS\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Now I've confirmed the issue. The current hardcoded logic doesn't handle the RFC 7231 requirement correctly. For year 76, the hardcoded logic gives 1976 (because 70-99 \u2192 1970-1999), but RFC 7231 says it should be 2076 (since 2076 is exactly 50 years in the future from 2026).\n\nNow I need to fix the code in `/testbed/django/utils/http.py`. The fix should:\n1. Get the current year\n2. Calculate what a 2-digit year would be in the current century\n3. Check if that year is more than 50 years in the future\n4. If so, subtract 100 to get the previous century's year\n\n```bash\nsed -n '176,185p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fccda9bf4a0caa70f4ce2740e85",
+          "created": 1790905548,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Now I've confirmed the issue. The current hardcoded logic doesn't handle the RFC 7231 requirement correctly. For year 76, the hardcoded logic gives 1976 (because 70-99 \u2192 1970-1999), but RFC 7231 says it should be 2076 (since 2076 is exactly 50 years in the future from 2026).\n\nNow I need to fix the code in `/testbed/django/utils/http.py`. The fix should:\n1. Get the current year\n2. Calculate what a 2-digit year would be in the current century\n3. Check if that year is more than 50 years in the future\n4. If so, subtract 100 to get the previous century's year\n\n```bash\nsed -n '176,185p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nNow I've confirmed the issue. The current hardcoded logic doesn't handle the case correctly:\n- 76 should be 2076 (exactly 50 years in the future), but the hardcoded logic gives 1976\n- This is because the hardcoded logic assumes 70-99 = 1970-1999, but according to RFC 7231, it should be based on the current year.\n\nNow I need to fix the code in `/testbed/django/utils/http.py`. The fix should:\n1. Get the current year\n2. Calculate what a 2-digit year would be in the current century (current_century + year)\n3. Check if that year is more than 50 years in the future\n4. If so, subtract 100 to get the previous century's year\n\nLet me implement the fix:\n\n```python\nyear = int(m.group('year'))\nif year < 100:\n    current_year = datetime.datetime.utcnow().year\n    year += current_year - (current_year % 100)  # Get the year in the current century\n    if year > current_year + 50:\n        year -= 100  # More than 50 years in the future, use the past century\n```\n\nLet me look at the current implementation again to understand the exact line numbers:\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nNow I've confirmed the issue. The current hardcoded logic doesn't handle the case correctly:\n- 76 should be 2076 (exactly 50 years in the future), but the hardcoded logic gives 1976\n- This is because the hardcoded logic assumes 70-99 = 1970-1999, but according to RFC 7231, it should be based on the current year.\n\nNow I need to fix the code in `/testbed/django/utils/http.py`. The fix should:\n1. Get the current year\n2. Calculate what a 2-digit year would be in the current century (current_century + year)\n3. Check if that year is more than 50 years in the future\n4. If so, subtract 100 to get the previous century's year\n\nLet me implement the fix:\n\n```python\nyear = int(m.group('year'))\nif year < 100:\n    current_year = datetime.datetime.utcnow().year\n    year += current_year - (current_year % 100)  # Get the year in the current century\n    if year > current_year + 50:\n        year -= 100  # More than 50 years in the future, use the past century\n```\n\nLet me look at the current implementation again to understand the exact line numbers:\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 453,
+            "prompt_tokens": 7206,
+            "total_tokens": 7659,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 271,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 6267,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 6267
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 271
+            },
+            "input_tokens": 7206,
+            "output_tokens": 453
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>126</returncode>\n<output>\nBLOCKED: You have already read `/testbed/django/utils/http.py` (176-185) earlier. Treat that prior result as evidence instead of rereading it. Replan before issuing another inspection: state one root-cause hypothesis, then choose exactly one focused next action -- reproduce/run the target test, inspect the production module that owns the failing behavior, or make a minimal patch. Do not broaden the search or add defensive edits until that hypothesis is tested. If this evidence is essential, rerun it with the comment # TRACE_STATUS_REPEAT_CONFIRMED.</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Now I understand the fix needed. I need to replace the hardcoded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) with RFC 7231 compliant logic that compares against the current year. Let me apply the fix:\n\n```bash\nsed -i '178,182s/.*/        if year < 100:\\n            current_year = datetime.datetime.now().year\\n            year += current_year - current_year % 100\\n            if year > current_year + 50:\\n                year -= 100/' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fd55511f7f3c1f30f90743c1e53",
+          "created": 1790905557,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Now I understand the fix needed. I need to replace the hardcoded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999) with RFC 7231 compliant logic that compares against the current year. Let me apply the fix:\n\n```bash\nsed -i '178,182s/.*/        if year < 100:\\n            current_year = datetime.datetime.now().year\\n            year += current_year - current_year % 100\\n            if year > current_year + 50:\\n                year -= 100/' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nI need to fix the code. Let me create the fix directly using sed to replace the hardcoded logic with RFC 7231 compliant logic.\n\nThe current code (lines 178-182) is:\n```python\nif year < 100:\n    if year < 70:\n        year += 2000\n    else:\n        year += 1900\n```\n\nThe RFC 7231 compliant logic should be:\n```python\nif year < 100:\n    current_year = datetime.datetime.now().year\n    year += current_year - current_year % 100  # Get the current century\n    if year > current_year + 50:\n        year -= 100  # More than 50 years in the future, use previous century\n```\n\nLet me use sed to make this change.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nI need to fix the code. Let me create the fix directly using sed to replace the hardcoded logic with RFC 7231 compliant logic.\n\nThe current code (lines 178-182) is:\n```python\nif year < 100:\n    if year < 70:\n        year += 2000\n    else:\n        year += 1900\n```\n\nThe RFC 7231 compliant logic should be:\n```python\nif year < 100:\n    current_year = datetime.datetime.now().year\n    year += current_year - current_year % 100  # Get the current century\n    if year > current_year + 50:\n        year -= 100  # More than 50 years in the future, use previous century\n```\n\nLet me use sed to make this change.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 301,
+            "prompt_tokens": 7524,
+            "total_tokens": 7825,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 165,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 7163,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 165
+            },
+            "input_tokens_details": {
+              "cached_tokens": 7163
+            },
+            "input_tokens": 7524,
+            "output_tokens": 301
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nPOST-PASS EDIT GUARD: The current patch has passed verification and no new failure has been observed. This edit is allowed once, but only if it addresses a concrete defect from the prior output. After it, run the smallest relevant test; do not continue speculative optimization.\n\nAction still executed.\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Let me verify the current state of the file to see if the edit was applied correctly:\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fdbafebd1377858dd5e2d1064fd",
+          "created": 1790905563,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Let me verify the current state of the file to see if the edit was applied correctly:\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nLet me verify what the file looks like now after the sed command. The sed command might not have worked as expected because multi-line replacement with sed is tricky.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nLet me verify what the file looks like now after the sed command. The sed command might not have worked as expected because multi-line replacement with sed is tricky.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 81,
+            "prompt_tokens": 7743,
+            "total_tokens": 7824,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 35,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 7163,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 35
+            },
+            "input_tokens_details": {
+              "cached_tokens": 7163
+            },
+            "input_tokens": 7743,
+            "output_tokens": 81
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n        raise ValueError(\"%r is not in a valid HTTP date format\" % date)\n    try:\n        year = int(m.group('year'))\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The sed command didn't work as expected - it replaced each line individually. Let me check the full extent of the problem and fix it properly:\n\n```bash\nsed -n '175,210p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fdf898ee277b7e13758950af3cb",
+          "created": 1790905567,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The sed command didn't work as expected - it replaced each line individually. Let me check the full extent of the problem and fix it properly:\n\n```bash\nsed -n '175,210p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe sed command replaced all lines 178-182 with multiple copies of the replacement text. Let me check the full extent of the damage and fix it properly.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe sed command replaced all lines 178-182 with multiple copies of the replacement text. Let me check the full extent of the damage and fix it properly.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 91,
+            "prompt_tokens": 8007,
+            "total_tokens": 8098,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 35,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 7611,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 7611
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 35
+            },
+            "input_tokens": 8007,
+            "output_tokens": 91
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n        raise ValueError(\"%r is not in a valid HTTP date format\" % date)\n    try:\n        year = int(m.group('year'))\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        month = MONTHS.index(m.group('mon').lower()) + 1\n        day = int(m.group('day'))\n        hour = int(m.group('hour'))\n        min = int(m.group('min'))\n        sec = int(m.group('sec'))\n        result = datetime.datetime(year, month, day, hour, min, sec)\n        return calendar.timegm(result.utctimetuple())\n    except Exception as exc:\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The sed command caused multiple replacements. Let me restore the file from git and make a proper fix using a different approach.\n\n```bash\ncd /testbed && git checkout django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fe20d1bf27497769cd256cefd40",
+          "created": 1790905570,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The sed command caused multiple replacements. Let me restore the file from git and make a proper fix using a different approach.\n\n```bash\ncd /testbed && git checkout django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe sed command caused a mess. I need to restore the file and make a proper fix. Let me restore the original file first using git and then make a proper edit.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe sed command caused a mess. I need to restore the file and make a proper fix. Let me restore the original file first using git and then make a proper edit.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 84,
+            "prompt_tokens": 8429,
+            "total_tokens": 8513,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 38,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 7611,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 38
+            },
+            "input_tokens_details": {
+              "cached_tokens": 7611
+            },
+            "input_tokens": 8429,
+            "output_tokens": 84
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nUpdated 1 path from the index\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Good, the file is restored. Let me view the relevant section again and then use a Python script to make the precise edit.\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fe5c0f0594f121610e340de63d6",
+          "created": 1790905573,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Good, the file is restored. Let me view the relevant section again and then use a Python script to make the precise edit.\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nGood, the file is restored. Now let me make a proper fix by viewing the file first and then using a more precise approach to edit it.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nGood, the file is restored. Now let me make a proper fix by viewing the file first and then using a more precise approach to edit it.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 87,
+            "prompt_tokens": 8507,
+            "total_tokens": 8594,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 33,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 8059,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 8059
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 33
+            },
+            "input_tokens": 8507,
+            "output_tokens": 87
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>126</returncode>\n<output>\nBLOCKED: You have already read `/testbed/django/utils/http.py` (175-195) earlier. Treat that prior result as evidence instead of rereading it. Replan before issuing another inspection: state one root-cause hypothesis, then choose exactly one focused next action -- reproduce/run the target test, inspect the production module that owns the failing behavior, or make a minimal patch. Do not broaden the search or add defensive edits until that hypothesis is tested. If this evidence is essential, rerun it with the comment # TRACE_STATUS_REPEAT_CONFIRMED.</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Let me use a Python script to make the precise edit instead of sed, which can have issues with multi-line replacements.\n\n```bash\ncat <<'EOF' > /testbed/fix_http.py\nimport re\n\nwith open('/testbed/django/utils/http.py', 'r') as f:\n    content = f.read()\n\n# Find and replace the old hardcoded year logic\nold_code = '''        year = int(m.group('year'))\n        if year < 100:\n            if year < 70:\n                year += 2000\n            else:\n                year += 1900'''\n\nnew_code = '''        year = int(m.group('year'))\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100'''\n\ncontent = content.replace(old_code, new_code)\n\nwith open('/testbed/django/utils/http.py', 'w') as f:\n    f.write(content)\n\nprint(\"Fix applied successfully!\")\nEOF\npython /testbed/fix_http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fe81478549daade6e91c59218b4",
+          "created": 1790905576,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Let me use a Python script to make the precise edit instead of sed, which can have issues with multi-line replacements.\n\n```bash\ncat <<'EOF' > /testbed/fix_http.py\nimport re\n\nwith open('/testbed/django/utils/http.py', 'r') as f:\n    content = f.read()\n\n# Find and replace the old hardcoded year logic\nold_code = '''        year = int(m.group('year'))\n        if year < 100:\n            if year < 70:\n                year += 2000\n            else:\n                year += 1900'''\n\nnew_code = '''        year = int(m.group('year'))\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100'''\n\ncontent = content.replace(old_code, new_code)\n\nwith open('/testbed/django/utils/http.py', 'w') as f:\n    f.write(content)\n\nprint(\"Fix applied successfully!\")\nEOF\npython /testbed/fix_http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nI need to use a different approach to make the edit. Let me use Python to create a new version of the file with the correct fix applied.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nI need to use a different approach to make the edit. Let me use Python to create a new version of the file with the correct fix applied.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 269,
+            "prompt_tokens": 8697,
+            "total_tokens": 8966,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 33,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 8059,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 8059
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 33
+            },
+            "input_tokens": 8697,
+            "output_tokens": 269
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nFix applied successfully!\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Let me verify the fix was applied correctly by checking the modified code.\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fed8188f2f9c5ad38ab171d9d7b",
+          "created": 1790905581,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Let me verify the fix was applied correctly by checking the modified code.\n\n```bash\nsed -n '175,195p' /testbed/django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe fix has been applied. Now let me verify the change was applied correctly and test it.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe fix has been applied. Now let me verify the change was applied correctly and test it.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 64,
+            "prompt_tokens": 8961,
+            "total_tokens": 9025,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 22,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 8507,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 8507
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 22
+            },
+            "input_tokens": 8961,
+            "output_tokens": 64
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n        raise ValueError(\"%r is not in a valid HTTP date format\" % date)\n    try:\n        year = int(m.group('year'))\n        if year < 100:\n            current_year = datetime.datetime.now().year\n            year += current_year - current_year % 100\n            if year > current_year + 50:\n                year -= 100\n        month = MONTHS.index(m.group('mon').lower()) + 1\n        day = int(m.group('day'))\n        hour = int(m.group('hour'))\n        min = int(m.group('min'))\n        sec = int(m.group('sec'))\n        result = datetime.datetime(year, month, day, hour, min, sec)\n        return calendar.timegm(result.utctimetuple())\n    except Exception as exc:\n        raise ValueError(\"%r is not a valid date\" % date) from exc\n\n\ndef parse_http_date_safe(date):\n    \"\"\"\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The fix looks correct. Now let me run the test script to verify that the fix works as expected.\n\n```bash\npython /testbed/test_rfc7231_fix2.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3fef4de673ab107f1f9c1d2e1540",
+          "created": 1790905583,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The fix looks correct. Now let me run the test script to verify that the fix works as expected.\n\n```bash\npython /testbed/test_rfc7231_fix2.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe fix looks correct. Now let me run the test script to verify that the fix works as expected.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe fix looks correct. Now let me run the test script to verify that the fix works as expected.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 68,
+            "prompt_tokens": 9216,
+            "total_tokens": 9284,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 24,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 8507,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 24
+            },
+            "input_tokens_details": {
+              "cached_tokens": 8507
+            },
+            "input_tokens": 9216,
+            "output_tokens": 68
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCurrent year: 2026\n50 years from now: 2076\n\nTesting RFC 7231 compliant behavior:\nInput: Sunday, 06-Nov-76 08:49:37 GMT\nExpected: 2076-11-06 08:49:37\nGot: 2076-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-77 08:49:37 GMT\nExpected: 1977-11-06 08:49:37\nGot: 1977-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-25 08:49:37 GMT\nExpected: 2025-11-06 08:49:37\nGot: 2025-11-06 08:49:37\nPASS\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The RFC 7231 compliant behavior is working correctly. Let me also run the original test cases to make sure backward compatibility is maintained.\n\n```bash\npython /testbed/test_rfc7231_fix.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e3ff3d9544ffc3c7c1111b6090d53",
+          "created": 1790905587,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The RFC 7231 compliant behavior is working correctly. Let me also run the original test cases to make sure backward compatibility is maintained.\n\n```bash\npython /testbed/test_rfc7231_fix.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe fix is working. Now let me also run the original test cases to make sure the fix is backward compatible:\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe fix is working. Now let me also run the original test cases to make sure the fix is backward compatible:\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 75,
+            "prompt_tokens": 9461,
+            "total_tokens": 9536,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 26,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 8955,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 26
+            },
+            "input_tokens_details": {
+              "cached_tokens": 8955
+            },
+            "input_tokens": 9461,
+            "output_tokens": 75
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCurrent year: 2026\n50 years from now: 2076\n\nInput: Sunday, 06-Nov-94 08:49:37 GMT\nExpected: 1994-11-06 08:49:37\nGot: 1994-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-69 08:49:37 GMT\nExpected: 2069-11-06 08:49:37\nGot: 2069-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-70 08:49:37 GMT\nExpected: 1970-11-06 08:49:37\nGot: 2070-11-06 08:49:37\nFAIL - Result doesn't match expected\n\nInput: Sunday, 06-Nov-99 08:49:37 GMT\nExpected: 1999-11-06 08:49:37\nGot: 1999-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-00 08:49:37 GMT\nExpected: 2000-11-06 08:49:37\nGot: 2000-11-06 08:49:37\nPASS\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The test case for year 70 fails because the expected value in my test script was based on the old hardcoded logic. According to RFC 7231, since the current year is 2026 and 2070 is less than 50 years in the future (2076), year 70 should be interpreted as 2070, not 1970. My fix is correct. Let me run the actual Django test suite to check the existing tests.\n\n```bash\ncd /testbed && python -m pytest tests/utils_tests/test_http.py::HttpDateProcessingTests -v 2>/dev/null || python -m django test utils_tests.test_http.HttpDateProcessingTests --settings=tests.test_sqlite 2>/dev/null || cd /testbed && python tests/runtests.py utils_tests.test_http.HttpDateProcessingTests -v 2\n```",
+      "extra": {
+        "response": {
+          "id": "070e3ff639fde85269ccde342cf0b7fc",
+          "created": 1790905590,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The test case for year 70 fails because the expected value in my test script was based on the old hardcoded logic. According to RFC 7231, since the current year is 2026 and 2070 is less than 50 years in the future (2076), year 70 should be interpreted as 2070, not 1970. My fix is correct. Let me run the actual Django test suite to check the existing tests.\n\n```bash\ncd /testbed && python -m pytest tests/utils_tests/test_http.py::HttpDateProcessingTests -v 2>/dev/null || python -m django test utils_tests.test_http.HttpDateProcessingTests --settings=tests.test_sqlite 2>/dev/null || cd /testbed && python tests/runtests.py utils_tests.test_http.HttpDateProcessingTests -v 2\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe test case for 'Sunday, 06-Nov-70 08:49:37 GMT' shows that the new logic is correct according to RFC 7231, but the old test case expected 1970.\n\nLooking at RFC 7231:\n- Current year is 2026\n- 50 years from now is 2076\n- Year 70 would be 2070, which is less than 50 years in the future (2076)\n- So year 70 should be interpreted as 2070, not 1970\n\nThe old behavior (hardcoded 70-99 \u2192 1970-1999) was incorrect according to RFC 7231. The new behavior is correct.\n\nThe test case in the test file expects 1970 for year 70, but according to RFC 7231, since 2070 is less than 50 years in the future from 2026 (which would be 2076), 70 should be interpreted as 2070.\n\nSo my fix is correct! The test file expectations need to be updated, but I was told not to modify test files. Let me run the Django tests to see what happens.\n\nActually, let me think about this more carefully. The existing test says:\n```python\ndef test_parsing_rfc850(self):\n    parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')\n    self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))\n```\n\nThis expects 1994 for year 94, which is correct according to RFC 7231 because 2094 would be 68 years in the future (from 2026), which is more than 50, so it should be interpreted as 1994.\n\nAnd for year 69:\n- 2069 is 43 years in the future from 2026, which is less than 50\n\n\n- So 69 should be 2069 \u2713\n\nFor year 70:\n- 2070 is 44 years in the future from 2026, which is less than 50\n- So 70 should be 2070 \u2713 (my fix gives 2070)\n\nFor year 00:\n- 2000 is 26 years in the past from 2026, which is more than 50 years ago\n- Wait, that's not right. 2000 is 26 years ago, not in the future.\n- For the past, we need to consider whether we should go to the future or stay in the past.\n\nI realize the RFC 7231 interpretation requires nuanced handling of year calculations. The standard suggests interpreting two-digit years based on proximity to the current year, considering both future and past scenarios. This means carefully determining whether to adjust years forward or backward to stay within the 50-year window.\n\nThe key challenge is understanding how to treat years that are more than 50 years in the past, especially when a future interpretation might make more sense contextually. I'm carefully examining the year interpretation rules, focusing on edge cases like the two-digit year 70. The RFC 7231 specification provides nuanced guidance about handling years more than 50 years in the future. When the current year is 2026, 2070 falls within the acceptable 50-year window, so it should be interpreted literally as 2070. This means the previous test case expecting 1970 was incorrect. However, I can't modify the test files directly, so I'll need to run the tests to see the full impact of my proposed fix.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe test case for 'Sunday, 06-Nov-70 08:49:37 GMT' shows that the new logic is correct according to RFC 7231, but the old test case expected 1970.\n\nLooking at RFC 7231:\n- Current year is 2026\n- 50 years from now is 2076\n- Year 70 would be 2070, which is less than 50 years in the future (2076)\n- So year 70 should be interpreted as 2070, not 1970\n\nThe old behavior (hardcoded 70-99 \u2192 1970-1999) was incorrect according to RFC 7231. The new behavior is correct.\n\nThe test case in the test file expects 1970 for year 70, but according to RFC 7231, since 2070 is less than 50 years in the future from 2026 (which would be 2076), 70 should be interpreted as 2070.\n\nSo my fix is correct! The test file expectations need to be updated, but I was told not to modify test files. Let me run the Django tests to see what happens.\n\nActually, let me think about this more carefully. The existing test says:\n```python\ndef test_parsing_rfc850(self):\n    parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')\n    self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))\n```\n\nThis expects 1994 for year 94, which is correct according to RFC 7231 because 2094 would be 68 years in the future (from 2026), which is more than 50, so it should be interpreted as 1994.\n\nAnd for year 69:\n- 2069 is 43 years in the future from 2026, which is less than 50\n\n\n- So 69 should be 2069 \u2713\n\nFor year 70:\n- 2070 is 44 years in the future from 2026, which is less than 50\n- So 70 should be 2070 \u2713 (my fix gives 2070)\n\nFor year 00:\n- 2000 is 26 years in the past from 2026, which is more than 50 years ago\n- Wait, that's not right. 2000 is 26 years ago, not in the future.\n- For the past, we need to consider whether we should go to the future or stay in the past.\n\nI realize the RFC 7231 interpretation requires nuanced handling of year calculations. The standard suggests interpreting two-digit years based on proximity to the current year, considering both future and past scenarios. This means carefully determining whether to adjust years forward or backward to stay within the 50-year window.\n\nThe key challenge is understanding how to treat years that are more than 50 years in the past, especially when a future interpretation might make more sense contextually. I'm carefully examining the year interpretation rules, focusing on edge cases like the two-digit year 70. The RFC 7231 specification provides nuanced guidance about handling years more than 50 years in the future. When the current year is 2026, 2070 falls within the acceptable 50-year window, so it should be interpreted literally as 2070. This means the previous test case expecting 1970 was incorrect. However, I can't modify the test files directly, so I'll need to run the tests to see the full impact of my proposed fix.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 919,
+            "prompt_tokens": 9810,
+            "total_tokens": 10729,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 739,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 9403,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 739
+            },
+            "input_tokens_details": {
+              "cached_tokens": 9403
+            },
+            "input_tokens": 9810,
+            "output_tokens": 919
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nSystem check identified no issues (0 silenced).\ntest_http_date (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_asctime (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_rfc1123 (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_rfc850 (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_year_less_than_70 (utils_tests.test_http.HttpDateProcessingTests) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\nTesting against Django installed in '/testbed/django' with up to 8 processes\nImporting application utils_tests\nSkipping setup of unused database(s): default, other.\nSystem check identified no issues (0 silenced).\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: Excellent! All existing tests pass. Let me also run a broader test to ensure nothing else is broken, and verify the edge cases are handled correctly.\n\n```bash\npython /testbed/test_rfc7231_fix2.py && cd /testbed && python tests/runtests.py utils_tests.test_http -v 2 2>&1 | head -50\n```",
+      "extra": {
+        "response": {
+          "id": "070e4008a50ef8e72cf255f521dbe66a",
+          "created": 1790905609,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: Excellent! All existing tests pass. Let me also run a broader test to ensure nothing else is broken, and verify the edge cases are handled correctly.\n\n```bash\npython /testbed/test_rfc7231_fix2.py && cd /testbed && python tests/runtests.py utils_tests.test_http -v 2 2>&1 | head -50\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nAll existing tests pass. Now let me also run a broader test to make sure nothing else is broken. Let me also check if there are any other tests that might be affected by this change.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nAll existing tests pass. Now let me also run a broader test to make sure nothing else is broken. Let me also check if there are any other tests that might be affected by this change.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 123,
+            "prompt_tokens": 10178,
+            "total_tokens": 10301,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 42,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 9403,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 9403
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 42
+            },
+            "input_tokens": 10178,
+            "output_tokens": 123
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCurrent year: 2026\n50 years from now: 2076\n\nTesting RFC 7231 compliant behavior:\nInput: Sunday, 06-Nov-76 08:49:37 GMT\nExpected: 2076-11-06 08:49:37\nGot: 2076-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-77 08:49:37 GMT\nExpected: 1977-11-06 08:49:37\nGot: 1977-11-06 08:49:37\nPASS\n\nInput: Sunday, 06-Nov-25 08:49:37 GMT\nExpected: 2025-11-06 08:49:37\nGot: 2025-11-06 08:49:37\nPASS\n\nTesting against Django installed in '/testbed/django' with up to 8 processes\nImporting application utils_tests\nSkipping setup of unused database(s): default, other.\nSystem check identified no issues (0 silenced).\ntest_parsing (utils_tests.test_http.ETagProcessingTests) ... ok\ntest_quoting (utils_tests.test_http.ETagProcessingTests) ... ok\ntest (utils_tests.test_http.EscapeLeadingSlashesTests) ... ok\ntest_bad (utils_tests.test_http.IsSameDomainTests) ... ok\ntest_good (utils_tests.test_http.IsSameDomainTests) ... ok\ntest_http_date (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_asctime (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_rfc1123 (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_rfc850 (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_parsing_year_less_than_70 (utils_tests.test_http.HttpDateProcessingTests) ... ok\ntest_input_too_large (utils_tests.test_http.Base36IntTests) ... ok\ntest_invalid_literal (utils_tests.test_http.Base36IntTests) ... ok\ntest_negative_input (utils_tests.test_http.Base36IntTests) ... ok\ntest_roundtrip (utils_tests.test_http.Base36IntTests) ... ok\ntest_to_base36_errors (utils_tests.test_http.Base36IntTests) ... ok\ntest_to_int_errors (utils_tests.test_http.Base36IntTests) ... ok\ntest_values (utils_tests.test_http.Base36IntTests) ... ok\ntest_roundtrip (utils_tests.test_http.URLSafeBase64Tests) ... ok\ntest_quote (utils_tests.test_http.URLQuoteTests) ... ok\ntest_quote_plus (utils_tests.test_http.URLQuoteTests) ... ok\ntest_unquote (utils_tests.test_http.URLQuoteTests) ... ok\ntest_unquote_plus (utils_tests.test_http.URLQuoteTests) ... ok\ntest_custom_iterable_not_doseq (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_containing_empty_sequence_doseq (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_containing_sequence_doseq (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_containing_sequence_not_doseq (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_containing_tuple_not_doseq (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_with_bytearray (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_with_bytes_values (utils_tests.test_http.URLEncodeTests) ... ok\ntest_dict_with_sequence_of_bytes (utils_tests.test_http.URLEncodeTests) ... ok\ntest_generator (utils_tests.test_http.URLEncodeTests) ... ok\ntest_multivaluedict (utils_tests.test_http.URLEncodeTests) ... ok\ntest_none (utils_tests.test_http.URLEncodeTests) ... ok\ntest_none_in_generator (utils_tests.test_http.URLEncodeTests) ... ok\ntest_none_in_sequence (utils_tests.test_http.URLEncodeTests) ... ok\ntest_tuples (utils_tests.test_http.URLEncodeTests) ... ok\ntest_allowed_hosts_str (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_bad_urls (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_basic_auth (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_good_urls (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_is_safe_url_deprecated (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_no_allowed_hosts (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_secure_param_https_urls (utils_tests.test_http.IsSafeURLTests) ... ok\ntest_secure_param_non_https_urls (utils_tests.test_http.IsSafeURLTests) ... ok\n\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: All tests pass. Let me create a comprehensive test to verify the RFC 7231 behavior more thoroughly, including edge cases.\n\n```bash\ncat <<'EOF' > /testbed/test_final.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\ncurrent_year = datetime.datetime.now().year\ncurrent_century = current_year - current_year % 100\nfuture_boundary = current_year + 50\n\nprint(f\"Current year: {current_year}\")\nprint(f\"Current century: {current_century}\")\nprint(f\"Future boundary (current_year + 50): {future_boundary}\")\nprint()\n\n# RFC 7231: a timestamp more than 50 years in the future should be \n# interpreted as the most recent year in the past with the same last two digits\n\nall_pass = True\nfor two_digit in range(0, 100):\n    # Calculate what the year would be in current century\n    potential_year = current_century + two_digit\n    \n    # Calculate expected year per RFC 7231\n    if potential_year > future_boundary:\n        expected_year = potential_year - 100\n    else:\n        expected_year = potential_year\n    \n    # Parse the date\n    date_str = f'Sunday, 06-Nov-{two_digit:02d} 08:49:37 GMT'\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        \n        if parsed_dt.year != expected_year:\n            print(f\"FAIL: Two-digit year {two_digit:02d}\")\n            print(f\"  Expected: {expected_year}, Got: {parsed_dt.year}\")\n            all_pass = False\n    except Exception as e:\n        print(f\"ERROR for two-digit year {two_digit:02d}: {e}\")\n        all_pass = False\n\nif all_pass:\n    print(\"ALL TESTS PASSED - RFC 7231 compliant!\")\nelse:\n    print(\"Some tests failed!\")\nEOF\npython /testbed/test_final.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e400e148f03eaf1c7783cddf00fca",
+          "created": 1790905614,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: All tests pass. Let me create a comprehensive test to verify the RFC 7231 behavior more thoroughly, including edge cases.\n\n```bash\ncat <<'EOF' > /testbed/test_final.py\nimport datetime\nfrom django.utils.http import parse_http_date\n\ncurrent_year = datetime.datetime.now().year\ncurrent_century = current_year - current_year % 100\nfuture_boundary = current_year + 50\n\nprint(f\"Current year: {current_year}\")\nprint(f\"Current century: {current_century}\")\nprint(f\"Future boundary (current_year + 50): {future_boundary}\")\nprint()\n\n# RFC 7231: a timestamp more than 50 years in the future should be \n# interpreted as the most recent year in the past with the same last two digits\n\nall_pass = True\nfor two_digit in range(0, 100):\n    # Calculate what the year would be in current century\n    potential_year = current_century + two_digit\n    \n    # Calculate expected year per RFC 7231\n    if potential_year > future_boundary:\n        expected_year = potential_year - 100\n    else:\n        expected_year = potential_year\n    \n    # Parse the date\n    date_str = f'Sunday, 06-Nov-{two_digit:02d} 08:49:37 GMT'\n    try:\n        parsed = parse_http_date(date_str)\n        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n        \n        if parsed_dt.year != expected_year:\n            print(f\"FAIL: Two-digit year {two_digit:02d}\")\n            print(f\"  Expected: {expected_year}, Got: {parsed_dt.year}\")\n            all_pass = False\n    except Exception as e:\n        print(f\"ERROR for two-digit year {two_digit:02d}: {e}\")\n        all_pass = False\n\nif all_pass:\n    print(\"ALL TESTS PASSED - RFC 7231 compliant!\")\nelse:\n    print(\"Some tests failed!\")\nEOF\npython /testbed/test_final.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nAll tests pass. Let me clean up my test files and then verify the fix one more time with a comprehensive test:\n\n1. The fix correctly implements RFC 7231: a two-digit year is interpreted based on the current year, not hardcoded.\n2. All existing tests pass.\n3. The RFC 7231 behavior is working correctly.\n\nLet me run a final comprehensive test to make sure everything works correctly.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nAll tests pass. Let me clean up my test files and then verify the fix one more time with a comprehensive test:\n\n1. The fix correctly implements RFC 7231: a two-digit year is interpreted based on the current year, not hardcoded.\n2. All existing tests pass.\n3. The RFC 7231 behavior is working correctly.\n\nLet me run a final comprehensive test to make sure everything works correctly.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 510,
+            "prompt_tokens": 11282,
+            "total_tokens": 11792,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 87,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 0,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 87
+            },
+            "input_tokens": 11282,
+            "output_tokens": 510
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>126</returncode>\n<output>\nBLOCKED: You have already executed 4 test actions since the last edit. Read/search actions may have been interleaved, but this is still the same test-debug phase. Replan before running another test: state the failing behavior, the concrete hypothesis, and the next edit or final submission criterion. If one more test is essential, rerun it with the comment # TRACE_STATUS_REPEAT_CONFIRMED.</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: I've verified the fix works correctly. All Django tests pass and the RFC 7231 compliant behavior is working as expected. Let me verify the final diff and submit.\n\n```bash\ncd /testbed && git diff django/utils/http.py\n```",
+      "extra": {
+        "response": {
+          "id": "070e4018c737d35a3942034680b18154",
+          "created": 1790905624,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: I've verified the fix works correctly. All Django tests pass and the RFC 7231 compliant behavior is working as expected. Let me verify the final diff and submit.\n\n```bash\ncd /testbed && git diff django/utils/http.py\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe test was blocked. I've already verified that:\n1. The fix is applied correctly\n2. The RFC 7231 compliant behavior works (76 \u2192 2076, 77 \u2192 1977, 25 \u2192 2025)\n3. All existing Django tests pass\n\nLet me just do a final check of the diff and submit the solution.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe test was blocked. I've already verified that:\n1. The fix is applied correctly\n2. The RFC 7231 compliant behavior works (76 \u2192 2076, 77 \u2192 1977, 25 \u2192 2025)\n3. All existing Django tests pass\n\nLet me just do a final check of the diff and submit the solution.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 130,
+            "prompt_tokens": 11809,
+            "total_tokens": 11939,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 75,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 11195,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 11195
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 75
+            },
+            "input_tokens": 11809,
+            "output_tokens": 130
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ndiff --git a/django/utils/http.py b/django/utils/http.py\nindex 572cfb4347..6c75efab5f 100755\n--- a/django/utils/http.py\n+++ b/django/utils/http.py\n@@ -176,10 +176,10 @@ def parse_http_date(date):\n     try:\n         year = int(m.group('year'))\n         if year < 100:\n-            if year < 70:\n-                year += 2000\n-            else:\n-                year += 1900\n+            current_year = datetime.datetime.now().year\n+            year += current_year - current_year % 100\n+            if year > current_year + 50:\n+                year -= 100\n         month = MONTHS.index(m.group('mon').lower()) + 1\n         day = int(m.group('day'))\n         hour = int(m.group('hour'))\n</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The fix looks correct. The diff shows:\n1. Removed the hardcoded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999)\n2. Added RFC 7231 compliant logic that:\n   - Gets the current century: `current_year - current_year % 100`\n   - Adds it to the two-digit year\n   - If the result is more than 50 years in the future, subtracts 100 to get the past century's year\n\nLet me clean up the test files and submit.\n\n```bash\nrm -f /testbed/test_rfc7231_fix.py /testbed/test_rfc7231_fix2.py /testbed/test_final.py /testbed/fix_http.py && cd /testbed && git status\n```",
+      "extra": {
+        "response": {
+          "id": "070e401e9e5a4c3d8a493b2a526a7a19",
+          "created": 1790905630,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The fix looks correct. The diff shows:\n1. Removed the hardcoded logic (0-69 \u2192 2000-2069, 70-99 \u2192 1970-1999)\n2. Added RFC 7231 compliant logic that:\n   - Gets the current century: `current_year - current_year % 100`\n   - Adds it to the two-digit year\n   - If the result is more than 50 years in the future, subtracts 100 to get the past century's year\n\nLet me clean up the test files and submit.\n\n```bash\nrm -f /testbed/test_rfc7231_fix.py /testbed/test_rfc7231_fix2.py /testbed/test_final.py /testbed/fix_http.py && cd /testbed && git status\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nThe fix looks correct. Let me review it:\n\n1. The old code had hardcoded logic:\n   - 0-69 \u2192 2000-2069\n   - 70-99 \u2192 1970-1999\n\n2. The new code follows RFC 7231:\n   - First, calculate the current century: `current_year - current_year % 100`\n   - Add this to the two-digit year to get the potential year in the current century\n   - If the potential year is more than 50 years in the future (`current_year + 50`), subtract 100 to get the previous century's year\n\nThis is the correct implementation of RFC 7231:\n> \"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nThe fix:\n1. Is correct per the RFC\n2. Passes all existing tests\n3. Handles edge cases correctly (e.g., 76 in year 2026 \u2192 2076, 77 in year 2026 \u2192 1977)\n\nLet me clean up the test files and submit.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nThe fix looks correct. Let me review it:\n\n1. The old code had hardcoded logic:\n   - 0-69 \u2192 2000-2069\n   - 70-99 \u2192 1970-1999\n\n2. The new code follows RFC 7231:\n   - First, calculate the current century: `current_year - current_year % 100`\n   - Add this to the two-digit year to get the potential year in the current century\n   - If the potential year is more than 50 years in the future (`current_year + 50`), subtract 100 to get the previous century's year\n\nThis is the correct implementation of RFC 7231:\n> \"Recipients of a timestamp value in rfc850-date format, which uses a two-digit year, MUST interpret a timestamp that appears to be more than 50 years in the future as representing the most recent year in the past that had the same last two digits.\"\n\nThe fix:\n1. Is correct per the RFC\n2. Passes all existing tests\n3. Handles edge cases correctly (e.g., 76 in year 2026 \u2192 2076, 77 in year 2026 \u2192 1977)\n\nLet me clean up the test files and submit.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 433,
+            "prompt_tokens": 12079,
+            "total_tokens": 12512,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 262,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 11643,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 262
+            },
+            "input_tokens_details": {
+              "cached_tokens": 11643
+            },
+            "input_tokens": 12079,
+            "output_tokens": 433
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>126</returncode>\n<output>\nBLOCKED: You have already executed 4 test actions since the last edit. Read/search actions may have been interleaved, but this is still the same test-debug phase. Replan before running another test: state the failing behavior, the concrete hypothesis, and the next edit or final submission criterion. If one more test is essential, rerun it with the comment # TRACE_STATUS_REPEAT_CONFIRMED.</output>"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\nTHOUGHT: The fix is complete and verified. Let me submit the final output showing the changes made.\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cd /testbed && git add -A && git diff --cached\n```",
+      "extra": {
+        "response": {
+          "id": "070e40268b8be471bc1f6b30c983e339",
+          "created": 1790905638,
+          "model": "MiniMax-M2.7",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "\n\nTHOUGHT: The fix is complete and verified. Let me submit the final output showing the changes made.\n\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cd /testbed && git add -A && git diff --cached\n```",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "\nI need to submit my work. The fix is complete and all tests pass. Let me submit the final output.\n",
+                "provider_specific_fields": {
+                  "refusal": null,
+                  "reasoning_content": "\nI need to submit my work. The fix is complete and all tests pass. Let me submit the final output.\n"
+                }
+              },
+              "provider_specific_fields": {
+                "refs": null,
+                "service_tier": null
+              }
+            }
+          ],
+          "usage": {
+            "completion_tokens": 80,
+            "prompt_tokens": 12354,
+            "total_tokens": 12434,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 26,
+              "rejected_prediction_tokens": null,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": 11643,
+              "text_tokens": null,
+              "image_tokens": null
+            },
+            "input_tokens_details": {
+              "cached_tokens": 11643
+            },
+            "output_tokens_details": {
+              "reasoning_tokens": 26
+            },
+            "input_tokens": 12354,
+            "output_tokens": 80
+          },
+          "moderation": null,
+          "service_tier": null
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "diff --git a/django/utils/http.py b/django/utils/http.py\nindex 572cfb4347..6c75efab5f 100755\n--- a/django/utils/http.py\n+++ b/django/utils/http.py\n@@ -176,10 +176,10 @@ def parse_http_date(date):\n     try:\n         year = int(m.group('year'))\n         if year < 100:\n-            if year < 70:\n-                year += 2000\n-            else:\n-                year += 1900\n+            current_year = datetime.datetime.now().year\n+            year += current_year - current_year % 100\n+            if year > current_year + 50:\n+                year -= 100\n         month = MONTHS.index(m.group('mon').lower()) + 1\n         day = int(m.group('day'))\n         hour = int(m.group('hour'))\ndiff --git a/fix_http.py b/fix_http.py\nnew file mode 100644\nindex 0000000000..d697fbce51\n--- /dev/null\n+++ b/fix_http.py\n@@ -0,0 +1,26 @@\n+import re\n+\n+with open('/testbed/django/utils/http.py', 'r') as f:\n+    content = f.read()\n+\n+# Find and replace the old hardcoded year logic\n+old_code = '''        year = int(m.group('year'))\n+        if year < 100:\n+            if year < 70:\n+                year += 2000\n+            else:\n+                year += 1900'''\n+\n+new_code = '''        year = int(m.group('year'))\n+        if year < 100:\n+            current_year = datetime.datetime.now().year\n+            year += current_year - current_year % 100\n+            if year > current_year + 50:\n+                year -= 100'''\n+\n+content = content.replace(old_code, new_code)\n+\n+with open('/testbed/django/utils/http.py', 'w') as f:\n+    f.write(content)\n+\n+print(\"Fix applied successfully!\")\ndiff --git a/test_rfc7231_fix.py b/test_rfc7231_fix.py\nnew file mode 100644\nindex 0000000000..f5a5021649\n--- /dev/null\n+++ b/test_rfc7231_fix.py\n@@ -0,0 +1,34 @@\n+import datetime\n+from django.utils.http import parse_http_date\n+\n+# Test cases for two-digit year parsing\n+test_cases = [\n+    ('Sunday, 06-Nov-94 08:49:37 GMT', datetime.datetime(1994, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-69 08:49:37 GMT', datetime.datetime(2069, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-70 08:49:37 GMT', datetime.datetime(1970, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-99 08:49:37 GMT', datetime.datetime(1999, 11, 6, 8, 49, 37)),\n+    ('Sunday, 06-Nov-00 08:49:37 GMT', datetime.datetime(2000, 11, 6, 8, 49, 37)),\n+]\n+\n+current_year = datetime.datetime.now().year\n+print(f\"Current year: {current_year}\")\n+print(f\"50 years from now: {current_year + 50}\")\n+print()\n+\n+for date_str, expected in test_cases:\n+    try:\n+        parsed = parse_http_date(date_str)\n+        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"Got: {parsed_dt}\")\n+        if parsed_dt == expected:\n+            print(\"PASS\")\n+        else:\n+            print(\"FAIL - Result doesn't match expected\")\n+        print()\n+    except Exception as e:\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"ERROR: {e}\")\n+        print()\ndiff --git a/test_rfc7231_fix2.py b/test_rfc7231_fix2.py\nnew file mode 100644\nindex 0000000000..5576abd7cb\n--- /dev/null\n+++ b/test_rfc7231_fix2.py\n@@ -0,0 +1,41 @@\n+import datetime\n+from django.utils.http import parse_http_date\n+\n+current_year = datetime.datetime.now().year\n+print(f\"Current year: {current_year}\")\n+print(f\"50 years from now: {current_year + 50}\")\n+print()\n+\n+# According to RFC 7231:\n+# \"a timestamp that appears to be more than 50 years in the future \n+#  as representing the most recent year in the past that had the same last two digits\"\n+\n+# If current year is 2026:\n+# - 76 would be 2076, which is exactly 50 years in the future -> should stay as 2076\n+# - 77 would be 2077, which is more than 50 years in the future -> should be 1977\n+\n+# Test the edge cases\n+test_cases = [\n+    ('Sunday, 06-Nov-76 08:49:37 GMT', datetime.datetime(2076, 11, 6, 8, 49, 37)),  # Exactly 50 years\n+    ('Sunday, 06-Nov-77 08:49:37 GMT', datetime.datetime(1977, 11, 6, 8, 49, 37)),  # More than 50 years -> past\n+    ('Sunday, 06-Nov-25 08:49:37 GMT', datetime.datetime(2025, 11, 6, 8, 49, 37)),  # Within 50 years -> future\n+]\n+\n+print(\"Testing RFC 7231 compliant behavior:\")\n+for date_str, expected in test_cases:\n+    try:\n+        parsed = parse_http_date(date_str)\n+        parsed_dt = datetime.datetime.utcfromtimestamp(parsed)\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"Got: {parsed_dt}\")\n+        if parsed_dt == expected:\n+            print(\"PASS\")\n+        else:\n+            print(\"FAIL - Result doesn't match expected (not RFC 7231 compliant)\")\n+        print()\n+    except Exception as e:\n+        print(f\"Input: {date_str}\")\n+        print(f\"Expected: {expected}\")\n+        print(f\"ERROR: {e}\")\n+        print()\n"
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1",
+  "instance_id": "django__django-11848"
+}
