@@ -977,6 +977,41 @@ def test_read_cache_invalidates_after_file_change(default_config):
     assert len(cache_messages) == 0
 
 
+@pytest.mark.parametrize("checkout", ["git checkout -- src/topics/tags.js", "git checkout feature"])
+def test_git_checkout_refreshes_edit_epoch_and_read_cache(default_config, checkout):
+    read = "sed -n '10,12p' src/topics/tags.js"
+    submit = "echo 'COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT'\necho 'done'"
+    env = StubEnvironment(
+        [
+            {"output": "old source\n", "returncode": 0},
+            {"output": "checkout complete\n", "returncode": 0},
+            {"output": "new source\n", "returncode": 0},
+            {"output": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\ndone\n", "returncode": 0},
+        ]
+    )
+    agent = DefaultAgent(
+        model=DeterministicModel(
+            outputs=[f"```bash\n{command}\n```" for command in (read, checkout, read, submit)]
+        ),
+        env=env,
+        **{
+            **default_config,
+            "instance_template": "{{task}}",
+            "read_cache_enable": True,
+            "trace_status_repeat_block_enabled": True,
+        },
+    )
+
+    exit_status, result = agent.run("Read source again after checkout")
+
+    assert exit_status == Submitted.__name__
+    assert result == "done\n"
+    assert env.commands == [read, checkout, read, submit]
+    assert agent._trace_status_last_source_edit_step == 2
+    assert not any("READ CACHE:" in message.get("content", "") for message in agent.messages)
+    assert not any("BLOCKED:" in message.get("content", "") for message in agent.messages)
+
+
 def test_trace_status_bar_summarizes_repeated_reads(default_config):
     env = StubEnvironment(
         [

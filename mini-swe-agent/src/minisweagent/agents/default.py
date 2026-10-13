@@ -1111,6 +1111,7 @@ If you need to make more changes, continue working as usual.
             r"\bsed\s+-i\b",
             r"\bperl\s+-\S*i\b",
             r"\bapply_patch\b",
+            r"\bgit\s+checkout\b",
             r"\bpython3?\b.*\bwrite_text\b",
             r"\bpython3?\b.*\bopen\([^)]*,\s*['\"]w",
             r"\bcat\s+<<.*>",
@@ -1257,6 +1258,9 @@ If you need to make more changes, continue working as usual.
     def _action_changes_tracked_source_code(self, action_text: str) -> bool:
         if not self._action_may_change_code(action_text):
             return False
+        # Checkout can replace tracked source or switch branches without an explicit write target.
+        if re.search(r"\bgit\s+checkout\b", action_text):
+            return True
         return any(self._is_tracked_production_path(path) for path in self._extract_write_targets(action_text))
 
     def _is_trace_status_scratch_experiment(self, action_text: str) -> bool:
