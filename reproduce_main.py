@@ -23,8 +23,8 @@ GROUPS = {
 }
 
 
-def summarize_run(label: str) -> tuple[int, float, float, int]:
-    run_dir = ROOT / 'traces' / label
+def summarize_run(label: str, cohort: str = 'traces') -> tuple[int, float, float, int]:
+    run_dir = ROOT / cohort / label
     tasks = sorted(p for p in run_dir.iterdir() if p.is_dir())
     assert len(tasks) == 50, f'{label}: expected 50 tasks, found {len(tasks)}'
     rows = [module.extract_task_cost(p) for p in tasks]
@@ -37,15 +37,26 @@ def summarize_run(label: str) -> tuple[int, float, float, int]:
     )
 
 
+def print_group(group: str, runs: list[tuple[int, float, float, int]]) -> None:
+    print(group)
+    print('  successes:', ', '.join(f'{r[0]}/50' for r in runs))
+    for name, values, unit, digits in [
+        ('SR', [r[0] * 2 for r in runs], '%', 1),
+        ('cost', [r[1] for r in runs], ' CNY', 3),
+        ('tokens', [r[2] for r in runs], 'M', 3),
+        ('API calls', [r[3] for r in runs], '', 1),
+    ]:
+        mean = statistics.mean(values)
+        spread = f' ± {statistics.stdev(values):.{digits}f}' if len(values) > 1 else ''
+        print(f'  {name}: {mean:.{digits}f}{spread}{unit}')
+
+
 def main() -> None:
     for group, labels in GROUPS.items():
-        runs = [summarize_run(label) for label in labels]
-        print(group)
-        print('  successes:', ', '.join(f'{r[0]}/50' for r in runs))
-        print(f'  mean SR: {statistics.mean(r[0] * 2 for r in runs):.1f}%')
-        print(f'  mean cost: {statistics.mean(r[1] for r in runs):.3f} CNY')
-        print(f'  mean tokens: {statistics.mean(r[2] for r in runs):.3f}M')
-        print(f'  mean API calls: {statistics.mean(r[3] for r in runs):.1f}')
+        print_group(group, [summarize_run(label) for label in labels])
+    labels = GROUPS['MiniMax PACE']
+    print_group('MiniMax PACE original independent runs',
+                [summarize_run(label, 'traces_original') for label in labels])
 
 
 if __name__ == '__main__':
