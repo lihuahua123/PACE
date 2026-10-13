@@ -12,6 +12,8 @@ This package contains the PACE controller implementation, run and analysis scrip
 - `data/trace_manifest.csv`: mapping from neutral run labels to archived run IDs and files.
 - `reproduce_main.py`: recomputes success, API calls, tokens, and estimated CNY cost for the main no-control and PACE rows.
 
+The bundled controller includes a later fix that refreshes the edit epoch after `git checkout`. The archived trajectories were generated before this fix; their recorded actions and paper statistics have not been changed.
+
 ## Recompute the main comparison
 
 Use Python 3.10 or newer. Install the dependencies in `mini-swe-agent/pyproject.toml` plus `pandas`, then run:
